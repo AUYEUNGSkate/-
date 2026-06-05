@@ -1,0 +1,11 @@
+node_modules/
+dist/
+data/
+.playwright-mcp/
+brand-design-md/
+.env
+.env.local
+*.log
+apple-refactor-*.png
+coverage/
+.DS_Store
