@@ -84,7 +84,8 @@ app.get("/api/items", (req, res) => {
 });
 
 app.patch("/api/items/:id/read", (req, res) => {
-  res.json({ ok: repositories.items.markRead(Number(req.params.id)), unreadCount: repositories.items.unreadCount() });
+  const ok = repositories.items.markRead(Number(req.params.id));
+  res.json({ ok, unreadCount: visibleUnreadCount(repositories.items.list()) });
 });
 
 app.get("/api/items/archived", (req, res) => {
@@ -108,25 +109,9 @@ app.post("/api/items/batch-delete", (req, res) => {
   res.json({ ok: repositories.items.batchDelete(ids) });
 });
 
-app.get("/api/items/archived", (req, res) => {
-  const limit = Number(req.query.limit ?? 100);
-  res.json(repositories.items.archived(limit));
-});
-
-app.post("/api/items/:id/restore", (req, res) => {
-  res.json({ ok: repositories.items.restore(Number(req.params.id)) });
-});
-
-app.post("/api/items/batch-restore", (req, res) => {
-  const { ids } = req.body as { ids?: number[] };
-  if (!ids?.length) return res.status(400).json({ error: "ids is required" });
-  res.json({ ok: repositories.items.batchRestore(ids) });
-});
-
-app.post("/api/items/batch-delete", (req, res) => {
-  const { ids } = req.body as { ids?: number[] };
-  if (!ids?.length) return res.status(400).json({ error: "ids is required" });
-  res.json({ ok: repositories.items.batchDelete(ids) });
+app.post("/api/items/archive-stale", (_req, res) => {
+  const ok = repositories.items.archiveStaleItems();
+  res.json({ ok, unreadCount: visibleUnreadCount(repositories.items.list()) });
 });
 
 app.post("/api/scan", async (_req, res, next) => {
@@ -161,8 +146,12 @@ function getDashboard() {
     sources: repositories.sources.all(),
     items,
     lastScan: repositories.scanRuns.last(),
-    unreadCount: repositories.items.unreadCount()
+    unreadCount: visibleUnreadCount(items)
   };
+}
+
+function visibleUnreadCount(items: Array<{ status: string; readAt: string | null; archivedAt?: string | null }>) {
+  return items.filter((item) => item.status === "new" && item.readAt === null && !item.archivedAt).length;
 }
 
 function serveFrontendInProduction() {

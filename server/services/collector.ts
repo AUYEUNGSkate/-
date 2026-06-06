@@ -3,6 +3,7 @@ import type { Keyword, ProviderType, Source } from "../../shared/types";
 import { getEnv } from "../config/env";
 import { assessContentQuality, cleanArticleTitle, cleanSummary } from "./contentFilter";
 import { normalizeUrl } from "./dedupe";
+import { enrichCollectedItem, extractInteractionCounts } from "./enrichment";
 
 export interface CollectedItem {
   sourceId: number;
@@ -23,6 +24,8 @@ export interface CollectedItem {
   interactionReposts: number;
   interactionReplies: number;
   interactionViews: number;
+  summarySource: "ai" | "rss" | "metadata" | "title";
+  interactionSource: "bilibili" | "html" | "rss" | "none";
 }
 
 const parser = new XMLParser({
@@ -47,15 +50,21 @@ export async function collectFromSources(keywords: Keyword[], sources: Source[])
 }
 
 export async function collectFromSource(keyword: Keyword, source: Source): Promise<CollectedItem[]> {
+  if (source.url.includes("{accountUid}") && (!keyword.accountMode || keyword.accountPlatform !== "bilibili" || !keyword.accountUid)) {
+    return [];
+  }
   if (source.providerType === "brave_search") {
     return collectFromBraveSearch(keyword, source);
   }
   const feedUrl = buildFeedUrl(source.url, keyword);
   const xml = await fetchText(feedUrl);
-  return parseFeed(xml, source, keyword);
+  return Promise.all(parseFeed(xml, source, keyword).map(enrichCollectedItem));
 }
 
 export function buildFeedUrl(template: string, keyword: Keyword): string {
+  if (template.includes("{accountUid}")) {
+    return template.replaceAll("{accountUid}", encodeURIComponent(keyword.accountUid));
+  }
   if (keyword.accountMode) {
     return template.replaceAll("{query}", encodeURIComponent(keyword.term));
   }
@@ -97,9 +106,10 @@ export async function collectFromBraveSearch(keyword: Keyword, source: Source): 
   if (!response.ok) throw new Error(`Brave Search HTTP ${response.status}`);
   const payload = await response.json() as BraveSearchResponse;
   const fetchedAt = new Date().toISOString();
-  return (payload.web?.results ?? [])
+  const items = (payload.web?.results ?? [])
     .map((result, index) => normalizeSearchResult(result, source, keyword, query, fetchedAt, index + 1))
     .filter((item): item is CollectedItem => Boolean(item));
+  return Promise.all(items.map(enrichCollectedItem));
 }
 
 async function fetchText(url: string): Promise<string> {
@@ -143,6 +153,7 @@ function normalizeFeedItem(
   const summary = cleanSummary(text(raw.description) || text(raw.summary) || text(raw.content) || "");
   const quality = assessContentQuality({ title, url, summary, sourceName: source.name, sourceCommunity: source.communitySource });
   if (quality.lowQuality) return null;
+  const unresolvedGoogleProxy = source.providerType === "google_news" && /news\.google\.com/i.test(url);
   const counts = extractInteractionCounts(title);
   return {
     sourceId: source.id,
@@ -157,12 +168,14 @@ function normalizeFeedItem(
     matchedKeyword: keyword.term,
     query: buildQuery(keyword),
     rank,
-    qualityScore: quality.score,
-    qualitySignals: quality.signals,
+    qualityScore: unresolvedGoogleProxy ? Math.max(0, quality.score - 18) : quality.score,
+    qualitySignals: unresolvedGoogleProxy ? [...quality.signals, "Google 代理原文未恢复"] : quality.signals,
     interactionLikes: counts.likes,
     interactionReposts: counts.reposts,
     interactionReplies: counts.replies,
-    interactionViews: counts.views
+    interactionViews: counts.views,
+    summarySource: summary ? "rss" : "title",
+    interactionSource: counts.likes || counts.reposts || counts.replies || counts.views ? "rss" : "none"
   };
 }
 
@@ -199,7 +212,9 @@ function normalizeSearchResult(
     interactionLikes: counts.likes,
     interactionReposts: counts.reposts,
     interactionReplies: counts.replies,
-    interactionViews: counts.views
+    interactionViews: counts.views,
+    summarySource: summary ? "rss" : "title",
+    interactionSource: counts.likes || counts.reposts || counts.replies || counts.views ? "rss" : "none"
   };
 }
 
@@ -225,6 +240,7 @@ function extractOriginalUrl(raw: Record<string, unknown>, fallback: string): str
 }
 
 function buildQuery(keyword: Keyword): string {
+  if (keyword.accountMode) return keyword.term;
   return [keyword.term, keyword.scope].filter(Boolean).join(" ");
 }
 
@@ -249,30 +265,6 @@ function decodeHtml(value: string): string {
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, "\"")
     .replace(/&#39;/g, "'");
-}
-
-function extractInteractionCounts(title: string): { likes: number; reposts: number; replies: number; views: number } {
-  const patterns = {
-    likes: /(\d+(?:\.\d+)?[kK万]?)\s*(?:赞|点赞|like|upvote|赞同)/i,
-    reposts: /(\d+(?:\.\d+)?[kK万]?)\s*(?:转发|repost|share)/i,
-    replies: /(\d+(?:\.\d+)?[kK万]?)\s*(?:回复|评论|comment|reply|回答|条评价|个回答)/i,
-    views: /(\d+(?:\.\d+)?[kK万]?)\s*(?:播放|浏览|view|阅读)/i,
-  };
-  const result = { likes: 0, reposts: 0, replies: 0, views: 0 };
-  for (const [key, pattern] of Object.entries(patterns)) {
-    const match = title.match(pattern);
-    if (match) {
-      result[key as keyof typeof result] = parseNumber(match[1]);
-    }
-  }
-  return result;
-}
-
-function parseNumber(str: string): number {
-  const num = parseFloat(str);
-  if (str.toLowerCase().includes("k")) return num * 1000;
-  if (str.includes("万")) return num * 10000;
-  return num;
 }
 
 function arrayify(value: unknown): Record<string, unknown>[] {

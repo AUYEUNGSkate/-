@@ -54,8 +54,8 @@ export async function runScan() {
 
     repositories.scanRuns.finish(scanRunId, "success", totals);
     
-    // 自动归档超过24小时的已读信息
-    const archivedCount = repositories.items.archiveOldReadItems();
+    // 自动归档超过24小时的已读和非最新信息
+    const archivedCount = repositories.items.archiveStaleItems();
     if (archivedCount > 0) {
       console.log("[scanner] Archived " + archivedCount + " old read items");
     }

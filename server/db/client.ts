@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import fs from "node:fs";
 import path from "node:path";
-import type { AiEvaluation, AiMode, HotspotItem, Keyword, ProviderType, ReliabilityTier, ScanRun, Source } from "../../shared/types";
+import type { AiEvaluation, AiMode, HotspotItem, InteractionSource, Keyword, ProviderType, ReliabilityTier, ScanRun, Source, SummarySource } from "../../shared/types";
 import { getEnv } from "../config/env";
 import { cleanArticleTitle, cleanSummary, isLowQualityResult } from "../services/contentFilter";
 import { titleSimilarity } from "../services/dedupe";
@@ -25,6 +25,8 @@ export interface RawItemInput {
   interactionReposts: number;
   interactionReplies: number;
   interactionViews: number;
+  summarySource?: SummarySource;
+  interactionSource?: InteractionSource;
 }
 
 export interface SourceInput {
@@ -163,7 +165,12 @@ function initializeSchema(db: Database.Database) {
   addColumnIfMissing(db, "items", "interaction_reposts", "INTEGER NOT NULL DEFAULT 0");
   addColumnIfMissing(db, "items", "interaction_replies", "INTEGER NOT NULL DEFAULT 0");
   addColumnIfMissing(db, "items", "interaction_views", "INTEGER NOT NULL DEFAULT 0");
+  addColumnIfMissing(db, "items", "summary_source", "TEXT NOT NULL DEFAULT 'rss'");
+  addColumnIfMissing(db, "items", "interaction_source", "TEXT NOT NULL DEFAULT 'none'");
   addColumnIfMissing(db, "keywords", "account_mode", "INTEGER NOT NULL DEFAULT 0");
+  addColumnIfMissing(db, "keywords", "account_platform", "TEXT NOT NULL DEFAULT ''");
+  addColumnIfMissing(db, "keywords", "account_uid", "TEXT NOT NULL DEFAULT ''");
+  addColumnIfMissing(db, "keywords", "account_url", "TEXT NOT NULL DEFAULT ''");
 }
 
 function addColumnIfMissing(db: Database.Database, table: string, column: string, definition: string) {
@@ -198,6 +205,17 @@ type SourcePreset = Required<SourceInput>;
 export function getDefaultSources(): SourcePreset[] {
   return [
     {
+      name: "RSSHub 百度搜索",
+      url: "https://rsshub.app/baidu/search/{query}",
+      category: "国内综合",
+      providerType: "rss",
+      reliabilityTier: "search",
+      communitySource: false,
+      minQualityScore: 70,
+      enabled: true,
+      builtin: true
+    },
+    {
       name: "国内综合新闻",
       url: "https://news.google.com/rss/search?q={query}%20(%E6%B8%B8%E6%88%8F%20OR%20%E6%89%8B%E6%B8%B8%20OR%20%E5%8E%82%E5%95%86%20OR%20%E7%89%88%E5%8F%B7)&hl=zh-CN&gl=CN&ceid=CN:zh-Hans",
       category: "国内综合",
@@ -205,7 +223,7 @@ export function getDefaultSources(): SourcePreset[] {
       reliabilityTier: "search",
       communitySource: false,
       minQualityScore: 68,
-      enabled: true,
+      enabled: false,
       builtin: true
     },
     {
@@ -216,7 +234,7 @@ export function getDefaultSources(): SourcePreset[] {
       reliabilityTier: "community",
       communitySource: true,
       minQualityScore: 78,
-      enabled: true,
+      enabled: false,
       builtin: true
     },
     {
@@ -227,6 +245,28 @@ export function getDefaultSources(): SourcePreset[] {
       reliabilityTier: "community",
       communitySource: true,
       minQualityScore: 76,
+      enabled: false,
+      builtin: true
+    },
+    {
+      name: "B站账号视频",
+      url: "https://rsshub.app/bilibili/user/video/{accountUid}",
+      category: "账号源",
+      providerType: "rss",
+      reliabilityTier: "trusted",
+      communitySource: false,
+      minQualityScore: 65,
+      enabled: true,
+      builtin: true
+    },
+    {
+      name: "B站账号动态",
+      url: "https://rsshub.app/bilibili/user/dynamic/{accountUid}",
+      category: "账号源",
+      providerType: "rss",
+      reliabilityTier: "trusted",
+      communitySource: false,
+      minQualityScore: 65,
       enabled: true,
       builtin: true
     },
@@ -238,7 +278,7 @@ export function getDefaultSources(): SourcePreset[] {
       reliabilityTier: "community",
       communitySource: true,
       minQualityScore: 82,
-      enabled: true,
+      enabled: false,
       builtin: true
     },
     {
@@ -249,7 +289,7 @@ export function getDefaultSources(): SourcePreset[] {
       reliabilityTier: "community",
       communitySource: true,
       minQualityScore: 78,
-      enabled: true,
+      enabled: false,
       builtin: true
     },
     {
@@ -260,7 +300,7 @@ export function getDefaultSources(): SourcePreset[] {
       reliabilityTier: "trusted",
       communitySource: false,
       minQualityScore: 72,
-      enabled: true,
+      enabled: false,
       builtin: true
     },
     {
@@ -271,7 +311,7 @@ export function getDefaultSources(): SourcePreset[] {
       reliabilityTier: "community",
       communitySource: true,
       minQualityScore: 84,
-      enabled: true,
+      enabled: false,
       builtin: true
     },
     {
@@ -282,6 +322,72 @@ export function getDefaultSources(): SourcePreset[] {
       reliabilityTier: "trusted",
       communitySource: false,
       minQualityScore: 66,
+      enabled: false,
+      builtin: true
+    },
+    {
+      name: "机核网",
+      url: "https://www.gcores.com/rss",
+      category: "国内媒体",
+      providerType: "rss",
+      reliabilityTier: "trusted",
+      communitySource: false,
+      minQualityScore: 62,
+      enabled: true,
+      builtin: true
+    },
+    {
+      name: "游民星空",
+      url: "https://rsshub.app/gamersky/news",
+      category: "国内媒体",
+      providerType: "rss",
+      reliabilityTier: "trusted",
+      communitySource: false,
+      minQualityScore: 62,
+      enabled: true,
+      builtin: true
+    },
+    {
+      name: "3DM 游戏",
+      url: "https://rsshub.app/3dm/news",
+      category: "国内媒体",
+      providerType: "rss",
+      reliabilityTier: "trusted",
+      communitySource: false,
+      minQualityScore: 62,
+      enabled: true,
+      builtin: true
+    },
+    {
+      name: "搜狐游戏",
+      url: "https://rsshub.app/sohu/game",
+      category: "国内综合",
+      providerType: "rss",
+      reliabilityTier: "trusted",
+      communitySource: false,
+      minQualityScore: 62,
+      enabled: true,
+      builtin: true
+    },
+    {
+      name: "网易游戏",
+      url: "https://rsshub.app/163/dy",
+      category: "国内综合",
+      providerType: "rss",
+      reliabilityTier: "trusted",
+      communitySource: false,
+      minQualityScore: 62,
+      enabled: true,
+      builtin: true
+    },
+    {
+      name: "17173 新闻",
+      url: "https://rsshub.app/17173/news",
+      category: "国内媒体",
+      providerType: "rss",
+      reliabilityTier: "trusted",
+      communitySource: false,
+      minQualityScore: 62,
       enabled: true,
       builtin: true
     },
@@ -293,7 +399,7 @@ export function getDefaultSources(): SourcePreset[] {
       reliabilityTier: "search",
       communitySource: false,
       minQualityScore: 70,
-      enabled: true,
+      enabled: false,
       builtin: true
     }
   ];
@@ -388,18 +494,30 @@ export const repositories = {
       return rows.map(mapKeyword);
     },
     create(term: string, scope: string): Keyword {
-      const accountMode = detectAccountMode(term.trim());
-      const info = getDb().prepare("INSERT INTO keywords (term, scope, account_mode) VALUES (?, ?, ?)").run(term.trim(), scope.trim(), Number(accountMode));
+      const account = detectAccountInfo(term.trim());
+      const info = getDb().prepare(`
+        INSERT INTO keywords (term, scope, account_mode, account_platform, account_uid, account_url)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(term.trim(), scope.trim(), Number(account.accountMode), account.accountPlatform, account.accountUid, account.accountUrl);
       return this.byId(Number(info.lastInsertRowid))!;
     },
-    update(id: number, input: Partial<Pick<Keyword, "term" | "scope" | "enabled" | "accountMode">>): Keyword | null {
+    update(id: number, input: Partial<Pick<Keyword, "term" | "scope" | "enabled" | "accountMode" | "accountPlatform" | "accountUid" | "accountUrl">>): Keyword | null {
       const current = this.byId(id);
       if (!current) return null;
-      getDb().prepare("UPDATE keywords SET term = ?, scope = ?, enabled = ?, account_mode = ? WHERE id = ?").run(
-        input.term?.trim() ?? current.term,
+      const nextTerm = input.term?.trim() ?? current.term;
+      const detected = input.term ? detectAccountInfo(nextTerm) : null;
+      getDb().prepare(`
+        UPDATE keywords
+        SET term = ?, scope = ?, enabled = ?, account_mode = ?, account_platform = ?, account_uid = ?, account_url = ?
+        WHERE id = ?
+      `).run(
+        nextTerm,
         input.scope?.trim() ?? current.scope,
         typeof input.enabled === "boolean" ? Number(input.enabled) : Number(current.enabled),
-        typeof input.accountMode === "boolean" ? Number(input.accountMode) : Number(current.accountMode),
+        typeof input.accountMode === "boolean" ? Number(input.accountMode) : Number(detected?.accountMode ?? current.accountMode),
+        input.accountPlatform ?? detected?.accountPlatform ?? current.accountPlatform,
+        input.accountUid ?? detected?.accountUid ?? current.accountUid,
+        input.accountUrl ?? detected?.accountUrl ?? current.accountUrl,
         id
       );
       return this.byId(id);
@@ -517,6 +635,8 @@ export const repositories = {
         FROM items i
         LEFT JOIN sources s ON s.id = i.source_id
         LEFT JOIN ai_evaluations e ON e.item_id = i.id
+        WHERE i.archived_at IS NULL
+          AND datetime(i.published_at) >= datetime('now', '-24 hours')
         ORDER BY i.read_at IS NOT NULL, i.published_at DESC, i.id DESC
         LIMIT ?
       `).all(limit) as ItemJoinedRow[];
@@ -525,8 +645,7 @@ export const repositories = {
         .filter((item) => !isLowQualityResult({ title: item.title, url: item.url, summary: item.summary }));
     },
     unreadCount(): number {
-      const row = getDb().prepare("SELECT COUNT(*) AS count FROM items WHERE read_at IS NULL AND archived_at IS NULL").get() as { count: number };
-      return row.count;
+      return this.list(1000).filter((item) => item.status === "new" && item.readAt === null).length;
     },
     archived(limit = 100): HotspotItem[] {
       const rows = getDb().prepare(`SELECT
@@ -569,7 +688,25 @@ export const repositories = {
       return getDb().prepare("DELETE FROM items WHERE id IN (" + placeholders + ")").run(...ids).changes;
     },
     archiveOldReadItems() {
-      return getDb().prepare(`UPDATE items SET archived_at = CURRENT_TIMESTAMP WHERE read_at IS NOT NULL AND read_at < datetime('now', '-24 hours') AND archived_at IS NULL`).run().changes;
+      return this.archiveStaleItems();
+    },
+    archiveStaleItems() {
+      const db = getDb();
+      const demoted = db.prepare(`
+        UPDATE items
+        SET status = 'watch'
+        WHERE status = 'new'
+          AND archived_at IS NULL
+          AND datetime(published_at) < datetime('now', '-24 hours')
+      `).run().changes;
+      const archived = db.prepare(`
+        UPDATE items
+        SET archived_at = CURRENT_TIMESTAMP
+        WHERE archived_at IS NULL
+          AND datetime(published_at) < datetime('now', '-24 hours')
+          AND (read_at IS NOT NULL OR status IN ('watch', 'ignored'))
+      `).run().changes;
+      return demoted + archived;
     },
     byId(id: number): HotspotItem | null {
       const row = getDb().prepare(`
@@ -616,14 +753,21 @@ export const repositories = {
             source_id, keyword_id, title, url, normalized_url, summary,
             published_at, fetched_at, matched_keyword, status,
             quality_score, quality_signals, evidence_count,
-            interaction_likes, interaction_reposts, interaction_replies, interaction_views
+            interaction_likes, interaction_reposts, interaction_replies, interaction_views,
+            summary_source, interaction_source
           ) VALUES (
             @sourceId, @keywordId, @title, @url, @normalizedUrl, @summary,
             @publishedAt, @fetchedAt, @matchedKeyword, 'watch',
             @qualityScore, @qualitySignalsJson, 1,
-            @interactionLikes, @interactionReposts, @interactionReplies, @interactionViews
+            @interactionLikes, @interactionReposts, @interactionReplies, @interactionViews,
+            @summarySource, @interactionSource
           )
-        `).run({ ...input, qualitySignalsJson: JSON.stringify(input.qualitySignals) });
+        `).run({
+          ...input,
+          qualitySignalsJson: JSON.stringify(input.qualitySignals),
+          summarySource: input.summarySource ?? "rss",
+          interactionSource: input.interactionSource ?? "none"
+        });
         const itemId = Number(info.lastInsertRowid);
         mergeItemEvidence(db, itemId, input);
         return { id: itemId, inserted: true };
@@ -701,6 +845,9 @@ interface KeywordRow {
   scope: string;
   enabled: number;
   account_mode: number;
+  account_platform: string;
+  account_uid: string;
+  account_url: string;
   created_at: string;
 }
 
@@ -749,6 +896,8 @@ interface ItemJoinedRow {
   interaction_reposts: number;
   interaction_replies: number;
   interaction_views: number;
+  summary_source: string;
+  interaction_source: string;
   source_reliability: ReliabilityTier | null;
   source_community: number | null;
   relevance_score: number | null;
@@ -770,6 +919,9 @@ function mapKeyword(row: KeywordRow): Keyword {
     scope: row.scope,
     enabled: Boolean(row.enabled),
     accountMode: Boolean(row.account_mode),
+    accountPlatform: row.account_platform ?? "",
+    accountUid: row.account_uid ?? "",
+    accountUrl: row.account_url ?? "",
     createdAt: row.created_at
   };
 }
@@ -828,6 +980,8 @@ function mapItem(row: ItemJoinedRow): HotspotItem {
     interactionReposts: row.interaction_reposts ?? 0,
     interactionReplies: row.interaction_replies ?? 0,
     interactionViews: row.interaction_views ?? 0,
+    summarySource: parseSummarySource(row.summary_source),
+    interactionSource: parseInteractionSource(row.interaction_source),
     evaluation: row.relevance_score === null ? null : {
       relevanceScore: row.relevance_score,
       credibilityScore: row.credibility_score ?? 0,
@@ -853,6 +1007,16 @@ function parseProviderType(value: string): ProviderType {
 function parseReliabilityTier(value: string): ReliabilityTier {
   if (value === "official" || value === "community" || value === "search") return value;
   return "trusted";
+}
+
+function parseSummarySource(value: string): SummarySource {
+  if (value === "ai" || value === "metadata" || value === "title") return value;
+  return "rss";
+}
+
+function parseInteractionSource(value: string): InteractionSource {
+  if (value === "bilibili" || value === "html" || value === "rss") return value;
+  return "none";
 }
 
 function parseJsonArray(value: string | null): string[] {
@@ -917,7 +1081,25 @@ function mergeItemEvidence(db: Database.Database, itemId: number, input: RawItem
   `).run(row.count, input.qualityScore, input.qualityScore, JSON.stringify(input.qualitySignals), itemId);
 }
 
-function detectAccountMode(term: string): boolean {
+interface AccountInfo {
+  accountMode: boolean;
+  accountPlatform: string;
+  accountUid: string;
+  accountUrl: string;
+}
+
+function detectAccountInfo(term: string): AccountInfo {
+  const url = extractUrlLike(term);
+  const bilibiliUid = extractBilibiliUid(term);
+  if (bilibiliUid) {
+    return {
+      accountMode: true,
+      accountPlatform: "bilibili",
+      accountUid: bilibiliUid,
+      accountUrl: url
+    };
+  }
+
   const accountPatterns = [
     /公司$/,
     /团队$/,
@@ -928,11 +1110,28 @@ function detectAccountMode(term: string): boolean {
     /平台$/,
     /引擎$/,
   ];
-  if (accountPatterns.some(p => p.test(term))) return true;
+  if (accountPatterns.some(p => p.test(term))) {
+    return { accountMode: true, accountPlatform: "", accountUid: "", accountUrl: url };
+  }
   // 短中文关键词且无空格，可能是组织名
   const chineseOnly = term.replace(/[^\u4e00-\u9fff]/g, "");
-  if (chineseOnly.length >= 2 && chineseOnly.length <= 3 && !term.includes(" ")) return true;
-  return false;
+  if (chineseOnly.length >= 2 && chineseOnly.length <= 3 && !term.includes(" ")) {
+    return { accountMode: true, accountPlatform: "", accountUid: "", accountUrl: url };
+  }
+  return { accountMode: false, accountPlatform: "", accountUid: "", accountUrl: url };
+}
+
+function extractUrlLike(value: string): string {
+  const match = value.match(/https?:\/\/\S+/i);
+  return match?.[0] ?? "";
+}
+
+function extractBilibiliUid(value: string): string {
+  const spaceMatch = value.match(/space\.bilibili\.com\/(\d+)/i);
+  if (spaceMatch) return spaceMatch[1];
+  const uidMatch = value.match(/\buid[:：\s]*(\d{3,})\b/i);
+  if (uidMatch) return uidMatch[1];
+  return "";
 }
 
 function hostname(url: string): string {

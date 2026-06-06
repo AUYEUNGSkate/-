@@ -8,6 +8,9 @@ const keyword: Keyword = {
   scope: "游戏开发",
   enabled: true,
   accountMode: false,
+  accountPlatform: "",
+  accountUid: "",
+  accountUrl: "",
   createdAt: new Date().toISOString()
 };
 

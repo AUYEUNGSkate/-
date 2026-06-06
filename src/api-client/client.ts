@@ -36,7 +36,8 @@ export const api = {
   archived: (limit = 100) => request<HotspotItem[]>(`/items/archived?limit=${limit}`),
   restore: (id: number) => request<{ ok: boolean }>(`/items/${id}/restore`, { method: "POST" }),
   batchRestore: (ids: number[]) => request<{ ok: number }>("/items/batch-restore", { method: "POST", body: JSON.stringify({ ids }) }),
-  batchDelete: (ids: number[]) => request<{ ok: number }>("/items/batch-delete", { method: "POST", body: JSON.stringify({ ids }) })
+  batchDelete: (ids: number[]) => request<{ ok: number }>("/items/batch-delete", { method: "POST", body: JSON.stringify({ ids }) }),
+  archiveStale: () => request<{ ok: number; unreadCount: number }>("/items/archive-stale", { method: "POST" })
 };
 
 export function formatDate(value: string | null): string {

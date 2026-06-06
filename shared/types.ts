@@ -3,6 +3,8 @@ export type AiMode = "openrouter" | "mock";
 export type RecommendedAction = "notify" | "watch" | "ignore";
 export type ProviderType = "rss" | "google_news" | "brave_search";
 export type ReliabilityTier = "official" | "trusted" | "community" | "search";
+export type SummarySource = "ai" | "rss" | "metadata" | "title";
+export type InteractionSource = "bilibili" | "html" | "rss" | "none";
 
 export interface Keyword {
   id: number;
@@ -10,6 +12,9 @@ export interface Keyword {
   scope: string;
   enabled: boolean;
   accountMode: boolean;
+  accountPlatform: string;
+  accountUid: string;
+  accountUrl: string;
   createdAt: string;
 }
 
@@ -52,6 +57,8 @@ export interface HotspotItem {
   interactionReposts: number;
   interactionReplies: number;
   interactionViews: number;
+  summarySource: SummarySource;
+  interactionSource: InteractionSource;
 }
 
 export interface AiEvaluation {

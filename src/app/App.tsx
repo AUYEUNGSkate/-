@@ -1,9 +1,7 @@
 ﻿import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   BellDot,
-  CheckCircle2,
   CircleOff,
-  ExternalLink,
   Eye,
   Gauge,
   Loader2,
@@ -17,8 +15,6 @@ import {
   Trash2,
   Zap
 } from "lucide-react";
-import { HoverBorderGradient } from "@/components/ui/hover-border-gradient";
-import { Spotlight } from "@/components/ui/spotlight";
 import type { AiMode, DashboardPayload, HotspotItem, Keyword } from "../../shared/types";
 import { api, formatDate } from "../api-client/client";
 
@@ -26,7 +22,6 @@ type ViewKey = "hotspots" | "monitor" | "sources";
 
 export function App() {
   const [dashboard, setDashboard] = useState<DashboardPayload | null>(null);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
   const [activeView, setActiveView] = useState<ViewKey>("hotspots");
   const [keywordFilter, setKeywordFilter] = useState<number | "all">("all");
   const [loading, setLoading] = useState(true);
@@ -54,34 +49,21 @@ export function App() {
   }, [dashboard]);
 
   const visibleItems = useMemo(() => (dashboard ? getVisibleItems(dashboard.items, keywordFilter) : []), [dashboard, keywordFilter]);
-  const unreadItems = useMemo(() => (dashboard ? dashboard.items.filter((item) => !item.readAt && item.status === "new").slice(0, 4) : []), [dashboard]);
-
-  const selected = useMemo(() => {
-    if (!dashboard) return null;
-    return visibleItems.find((item) => item.id === selectedId) ?? visibleItems[0] ?? null;
-  }, [dashboard, selectedId, visibleItems]);
-
-  const featured = visibleItems[0] ?? null;
+  const unreadItems = useMemo(() => getUnreadItems(dashboard?.items ?? []), [dashboard]);
+  const unreadCount = unreadItems.length;
+  const todayAdded = useMemo(() => getTodayAddedCount(dashboard?.items ?? []), [dashboard]);
+  const urgentCount = useMemo(
+    () => (dashboard?.items ?? []).filter((item) => item.qualityScore >= 90 || (item.evaluation?.hotnessScore ?? 0) >= 85).length,
+    [dashboard]
+  );
   const activeKeywords = dashboard?.keywords.filter((keyword) => keyword.enabled).length ?? 0;
-  const activeSources = dashboard?.sources.filter((source) => source.enabled).length ?? 0;
 
-  async function openHotspots(itemId?: number) {
+  async function openHotspots() {
     setActiveView("hotspots");
-    if (itemId) {
-      setSelectedId(itemId);
-      const item = dashboard?.items.find(i => i.id === itemId);
-      if (item && !item.readAt) {
-        await api.markRead(item.id);
-        await refresh();
-      }
-    }
   }
 
   function changeKeywordFilter(next: number | "all") {
     setKeywordFilter(next);
-    if (!dashboard) return;
-    const nextItems = getVisibleItems(dashboard.items, next);
-    setSelectedId(nextItems[0]?.id ?? null);
   }
 
   async function loadArchived() {
@@ -140,7 +122,6 @@ export function App() {
     try {
       const next = await api.dashboard();
       setDashboard(next);
-      setSelectedId((current) => current ?? next.items[0]?.id ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "加载失败");
     } finally {
@@ -154,7 +135,6 @@ export function App() {
     try {
       const result = await api.scan();
       setDashboard(result.dashboard);
-      setSelectedId(result.dashboard.items[0]?.id ?? null);
       setActiveView("hotspots");
     } catch (err) {
       setError(err instanceof Error ? err.message : "扫描失败");
@@ -181,8 +161,24 @@ export function App() {
   }
 
   async function markRead(item: HotspotItem) {
-    await api.markRead(item.id);
-    await refresh();
+    const readAt = new Date().toISOString();
+    setDashboard((current) => {
+      if (!current) return current;
+      const items = current.items.map((entry) => (entry.id === item.id ? { ...entry, readAt } : entry));
+      return { ...current, items, unreadCount: getUnreadItems(items).length };
+    });
+    try {
+      const result = await api.markRead(item.id);
+      setDashboard((current) => (current ? { ...current, unreadCount: result.unreadCount } : current));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "标记已读失败");
+      await refresh();
+    }
+  }
+
+  function openOriginal(item: HotspotItem) {
+    if (!item.readAt) void markRead(item);
+    window.open(item.url, "_blank", "noopener,noreferrer");
   }
 
   async function saveSettings() {
@@ -208,9 +204,11 @@ export function App() {
     <main className="radar-page">
       <TopNav
         activeView={activeView}
-        unreadCount={dashboard.unreadCount}
+        unreadCount={unreadCount}
         unreadItems={unreadItems}
         onRefresh={refresh}
+        scanning={scanning}
+        onScan={runScan}
         onOpenHotspots={openHotspots}
         onChangeView={setActiveView}
       />
@@ -219,14 +217,10 @@ export function App() {
         {error ? <div className="radar-error">{error}</div> : null}
 
         <CommandDeck
-          featured={featured}
-          unreadCount={dashboard.unreadCount}
+          totalHotspots={dashboard.items.length}
+          todayAdded={todayAdded}
+          urgentCount={urgentCount}
           activeKeywords={activeKeywords}
-          activeSources={activeSources}
-          aiOnline={dashboard.settings.openRouterConfigured}
-          scanning={scanning}
-          onScan={runScan}
-          onManage={() => setActiveView("monitor")}
         />
 
         {activeView === "hotspots" ? (
@@ -236,10 +230,8 @@ export function App() {
             keywords={dashboard.keywords}
             keywordFilter={keywordFilter}
             onKeywordFilter={changeKeywordFilter}
-            featured={featured}
-            selected={selected}
-            onSelect={setSelectedId}
             onRead={markRead}
+            onOpenOriginal={openOriginal}
             showArchived={showArchived}
             archivedItems={archivedItems}
             selectedArchivedIds={selectedArchivedIds}
@@ -292,6 +284,8 @@ function TopNav({
   unreadCount,
   unreadItems,
   onRefresh,
+  scanning,
+  onScan,
   onOpenHotspots,
   onChangeView
 }: {
@@ -299,13 +293,15 @@ function TopNav({
   unreadCount: number;
   unreadItems: HotspotItem[];
   onRefresh: () => void;
-  onOpenHotspots: (itemId?: number) => void;
+  scanning: boolean;
+  onScan: () => Promise<void>;
+  onOpenHotspots: () => void;
   onChangeView: (view: ViewKey) => void;
 }) {
   const tabs: Array<{ key: ViewKey; label: string; icon: ReactNode }> = [
-    { key: "hotspots", label: "热点", icon: <Sparkles className="size-4" /> },
-    { key: "monitor", label: "关键词", icon: <Search className="size-4" /> },
-    { key: "sources", label: "来源", icon: <Rss className="size-4" /> }
+    { key: "hotspots", label: "热点雷达", icon: <Zap className="size-4" /> },
+    { key: "monitor", label: "监控词", icon: <Radar className="size-4" /> },
+    { key: "sources", label: "搜索", icon: <Search className="size-4" /> }
   ];
 
   return (
@@ -317,6 +313,7 @@ function TopNav({
           </span>
           <div>
             <strong>HotPulse</strong>
+            <small>AI 热点雷达</small>
           </div>
         </div>
 
@@ -330,8 +327,9 @@ function TopNav({
         </nav>
 
         <div className="radar-nav-actions">
-          <button className="radar-icon-button" onClick={onRefresh} title="刷新">
-            <RefreshCcw className="size-4" />
+          <button className="scan-button" onClick={() => void onScan()} disabled={scanning}>
+            {scanning ? <Loader2 className="size-4 animate-spin" /> : <RefreshCcw className="size-4" />}
+            立即扫描
           </button>
 
           <div className="notify-wrap">
@@ -349,7 +347,7 @@ function TopNav({
                   <p className="notify-empty">已全部读完</p>
                 ) : (
                   unreadItems.map((item) => (
-                    <button key={item.id} className="notify-item" onClick={() => onOpenHotspots(item.id)}>
+                    <button key={item.id} className="notify-item" onClick={() => onOpenHotspots()}>
                       <strong>{item.title}</strong>
                       <small>
                         {item.matchedKeyword} · {formatDate(item.publishedAt)}
@@ -360,6 +358,9 @@ function TopNav({
               </div>
             </div>
           </div>
+          <button className="radar-icon-button" onClick={onRefresh} title="刷新">
+            <RefreshCcw className="size-4" />
+          </button>
         </div>
       </div>
     </header>
@@ -367,62 +368,31 @@ function TopNav({
 }
 
 function CommandDeck({
-  featured,
-  unreadCount,
-  activeKeywords,
-  activeSources,
-  aiOnline,
-  scanning,
-  onScan,
-  onManage
+  totalHotspots,
+  todayAdded,
+  urgentCount,
+  activeKeywords
 }: {
-  featured: HotspotItem | null;
-  unreadCount: number;
+  totalHotspots: number;
+  todayAdded: number;
+  urgentCount: number;
   activeKeywords: number;
-  activeSources: number;
-  aiOnline: boolean;
-  scanning: boolean;
-  onScan: () => Promise<void>;
-  onManage: () => void;
 }) {
+  const metrics = [
+    { label: "总热点", value: totalHotspots, tone: "default" },
+    { label: "今日新增", value: todayAdded, tone: "cyan" },
+    { label: "紧急热点", value: urgentCount, tone: "red" },
+    { label: "监控词", value: activeKeywords, tone: "green" }
+  ];
+
   return (
-    <section className="deck-panel">
-      <Spotlight className="deck-spotlight" fill="#60a5fa" />
-      <div className="deck-main">
-        <div className="deck-heading">
-          <h1>热点监控</h1>
-          {featured ? (
-            <a className="deck-headline" href={featured.url} target="_blank" rel="noreferrer">
-              <span>{featured.title}</span>
-            </a>
-          ) : null}
+    <section className="metric-grid" aria-label="热点概览">
+      {metrics.map((metric) => (
+        <div key={metric.label} className={`metric-card ${metric.tone}`}>
+          <span>{metric.label}</span>
+          <strong>{metric.value}</strong>
         </div>
-
-        <div className="deck-stats">
-          <CompactMetric label="未读" value={String(unreadCount)} />
-          <CompactMetric label="关键词" value={String(activeKeywords)} />
-          <CompactMetric label="来源" value={String(activeSources)} />
-          <CompactMetric label="AI" value={aiOnline ? "Online" : "Mock"} />
-        </div>
-
-        <div className="deck-actions">
-          <HoverBorderGradient
-            as="button"
-            containerClassName="hero-action-primary"
-            surfaceClassName="hero-action-surface compact-action-surface"
-            onClick={() => void onScan()}
-            aria-label="立即扫描"
-          >
-            <span className="hero-action-content">
-              {scanning ? <Loader2 className="size-4 animate-spin" /> : <Zap className="size-4" />}
-              立即扫描
-            </span>
-          </HoverBorderGradient>
-          <button className="hero-secondary-button compact-secondary" onClick={onManage}>
-            管理关键词
-          </button>
-        </div>
-      </div>
+      ))}
     </section>
   );
 }
@@ -433,10 +403,8 @@ function HotspotView({
   keywords,
   keywordFilter,
   onKeywordFilter,
-  featured,
-  selected,
-  onSelect,
   onRead,
+  onOpenOriginal,
   showArchived,
   archivedItems,
   selectedArchivedIds,
@@ -452,10 +420,8 @@ function HotspotView({
   keywords: Keyword[];
   keywordFilter: number | "all";
   onKeywordFilter: (id: number | "all") => void;
-  featured: HotspotItem | null;
-  selected: HotspotItem | null;
-  onSelect: (id: number) => void;
   onRead: (item: HotspotItem) => void;
+  onOpenOriginal: (item: HotspotItem) => void;
   showArchived: boolean;
   archivedItems: HotspotItem[];
   selectedArchivedIds: Set<number>;
@@ -475,8 +441,8 @@ function HotspotView({
   }
 
   return (
-    <div className="hotspot-layout compact-layout">
-      <section className="surface-panel track-panel compact-track" aria-label="固定关键词热点追踪">
+    <div className="hotspot-workbench">
+      <section className="track-panel" aria-label="固定关键词热点追踪">
         <div className="track-chip-row">
           <button className={keywordFilter === "all" ? "track-chip active" : "track-chip"} onClick={() => onKeywordFilter("all")}>
             全部
@@ -496,19 +462,21 @@ function HotspotView({
         </div>
       </section>
 
-
-      <section className="surface-panel list-panel compact-list-panel">
-        <div className="section-header-with-action">
-          <SectionHeader icon={<Sparkles className="size-4" />} title={showArchived ? "归档热点" : "实时热点"} />
-          <button 
-            className={showArchived ? "toolbar-button active" : "toolbar-button"}
-            onClick={() => {
-              onShowArchived(!showArchived);
-              if (!showArchived) onLoadArchived();
-            }}
-          >
-            {showArchived ? "返回主列表" : "查看归档"}
-          </button>
+      <section className="feed-panel">
+        <div className="feed-head">
+          <SectionHeader icon={<Sparkles className="size-4" />} title={showArchived ? "归档热点" : "实时热点流"} />
+          <div className="feed-actions">
+            <span>每 30 分钟自动更新</span>
+            <button 
+              className={showArchived ? "toolbar-button active" : "toolbar-button"}
+              onClick={() => {
+                onShowArchived(!showArchived);
+                if (!showArchived) onLoadArchived();
+              }}
+            >
+              {showArchived ? "返回主列表" : "查看归档"}
+            </button>
+          </div>
         </div>
         {showArchived ? (
           <div className="archived-view">
@@ -517,12 +485,12 @@ function HotspotView({
                 批量恢复 ({selectedArchivedIds.size})
               </button>
               <button onClick={onBatchDelete} disabled={selectedArchivedIds.size === 0}>
-                批量删除 ({selectedArchivedIds.size})
+                批量删除
               </button>
             </div>
             <div className="archived-list">
               {archivedItems.length === 0 ? (
-                <EmptyState title="暂无归档内容" body="已读信息会在24小时后自动归档。" />
+                <EmptyState title="暂无归档内容" body="已读信息会在 24 小时后自动归档。" />
               ) : (
                 archivedItems.map((item) => (
                   <div key={item.id} className="archived-item">
@@ -544,34 +512,62 @@ function HotspotView({
         ) : (
           <div className="signal-list">
             {items.length === 0 ? (
-              <EmptyState title="暂无候选内容" body="这个关键词暂时没有新的有效资讯。" />
+              <EmptyState title="暂无候选内容" body="当前筛选下没有新的有效资讯。" />
             ) : (
-              items.map((item) => (
-                <button key={item.id} className={selected?.id === item.id ? "signal-item selected" : "signal-item"} onClick={() => {
-                  onSelect(item.id);
-                  if (!item.readAt) {
-                    onRead(item);
-                  }
-                }}>
-                  <span className={item.status === "new" && !item.readAt ? "signal-bullet active" : "signal-bullet"} />
-                  <span className="signal-copy">
-                    <strong>{item.title}</strong>
-                    <div className="signal-meta">
-                      <small>
-                        {item.matchedKeyword} · {formatDate(item.publishedAt)}
-                      </small>
-                      {formatInteraction(item)}
-                    </div>
-                  </span>
-                </button>
-              ))
+              items.map((item) => <HotspotCard key={item.id} item={item} onRead={onRead} onOpenOriginal={onOpenOriginal} />)
             )}
           </div>
         )}
       </section>
-
-      <Inspector item={selected} onRead={onRead} />
     </div>
+  );
+}
+
+function HotspotCard({ item, onRead, onOpenOriginal }: { item: HotspotItem; onRead: (item: HotspotItem) => void; onOpenOriginal: (item: HotspotItem) => void }) {
+  const unread = item.status === "new" && !item.readAt;
+  const priority = getPriority(item);
+  const interaction = formatInteraction(item);
+
+  return (
+    <article className={unread ? "signal-item unread" : "signal-item"}>
+      <div className={`priority-badge ${priority.tone}`}>
+        <Zap className="size-3" />
+        {priority.label}
+      </div>
+      <div className="signal-copy">
+        <div className="signal-source">
+          <span>{item.matchedKeyword}</span>
+          <span>{getItemSourceLabel(item)}</span>
+        </div>
+        <h3>
+          <a
+            className="signal-title"
+            href={item.url}
+            target="_blank"
+            rel="noreferrer"
+            onClick={(event) => {
+              event.preventDefault();
+              onOpenOriginal(item);
+            }}
+          >
+            {item.title}
+          </a>
+        </h3>
+        <p>{displaySummary(item)}</p>
+        <div className="signal-meta">
+          <span>质量 {item.qualityScore}</span>
+          <span>{formatDate(item.publishedAt)}</span>
+          {interaction ? <span>{interaction}</span> : null}
+        </div>
+      </div>
+      <div className="signal-actions">
+        {!item.readAt ? (
+          <button className="ghost-action" onClick={() => onRead(item)}>
+            标记已读
+          </button>
+        ) : null}
+      </div>
+    </article>
   );
 }
 
@@ -716,70 +712,6 @@ function SourceView(props: {
   );
 }
 
-function Inspector({ item, onRead }: { item: HotspotItem | null; onRead: (item: HotspotItem) => void }) {
-  if (!item) {
-    return (
-      <aside className="inspector-panel compact-inspector">
-        <EmptyState title="选择一个热点" body="AI 判读会显示在这里。" />
-      </aside>
-    );
-  }
-
-  return (
-    <aside className="inspector-panel compact-inspector">
-      <div className="inspector-meta">
-        <span>{item.matchedKeyword}</span>
-        <span>{formatDate(item.publishedAt)}</span>
-        <span>质量 {item.qualityScore}</span>
-        <span>证据 {item.evidenceCount}</span>
-      </div>
-      <h3>{item.title}</h3>
-      <p className="inspector-summary">{item.evaluation?.reason ?? "等待 AI 判别"}</p>
-      <div className="reliability-grid">
-        <ReliabilityPill label="来源等级" value={reliabilityLabel(item.sourceReliability)} />
-        <ReliabilityPill label="社区单源" value={item.communitySource && item.evidenceCount < 2 ? "是" : "否"} />
-        <ReliabilityPill label="命中引擎" value={item.evidenceProviders.map(providerLabel).join(" / ") || "RSS"} />
-        <ReliabilityPill label="证据来源" value={item.evidenceSourceNames.slice(0, 3).join(" / ") || "当前来源"} />
-      </div>
-      <div className="inspector-note">
-        {(item.qualitySignals.length ? item.qualitySignals : ["基础质量通过"]).join("；")}
-      </div>
-      <div className="inspector-actions">
-        {!item.readAt ? (
-          <button className="hero-secondary-button compact-secondary" onClick={() => onRead(item)}>
-            <CheckCircle2 className="size-4" />
-            标记已读
-          </button>
-        ) : null}
-        <HoverBorderGradient as="a" href={item.url} target="_blank" rel="noreferrer" surfaceClassName="hero-action-surface compact-action-surface">
-          <span className="hero-action-content">
-            打开原文
-            <ExternalLink className="size-4" />
-          </span>
-        </HoverBorderGradient>
-      </div>
-    </aside>
-  );
-}
-
-function CompactMetric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="compact-metric">
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
-}
-
-function ReliabilityPill({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="reliability-pill">
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
-}
-
 function SectionHeader({ icon, title, body }: { icon: ReactNode; title: string; body?: string }) {
   return (
     <div className="section-header compact-section-header">
@@ -802,13 +734,33 @@ function EmptyState({ title, body }: { title: string; body: string }) {
 }
 
 function displaySummary(item: HotspotItem): string {
-  const raw = item.evaluation?.summary || item.summary || "等待 AI 摘要";
-  return cleanText(raw);
+  const raw = item.summary || item.evaluation?.summary || `${item.title} 的最新动态，建议打开原文查看完整信息。`;
+  return trimText(cleanText(raw), 120);
 }
 
 function getVisibleItems(items: HotspotItem[], keywordFilter: number | "all"): HotspotItem[] {
   if (keywordFilter === "all") return items;
   return items.filter((item) => item.keywordId === keywordFilter);
+}
+
+function getUnreadItems(items: HotspotItem[]): HotspotItem[] {
+  return items.filter((item) => item.status === "new" && !item.readAt);
+}
+
+function getTodayAddedCount(items: HotspotItem[]): number {
+  const today = new Date().toDateString();
+  return items.filter((item) => new Date(item.publishedAt).toDateString() === today).length;
+}
+
+function getPriority(item: HotspotItem): { label: string; tone: "high" | "medium" | "low" } {
+  const hotness = item.evaluation?.hotnessScore ?? item.qualityScore;
+  if (hotness >= 85 || item.qualityScore >= 90) return { label: "HIGH", tone: "high" };
+  if (hotness >= 65 || item.qualityScore >= 70) return { label: "MEDIUM", tone: "medium" };
+  return { label: "LOW", tone: "low" };
+}
+
+function getItemSourceLabel(item: HotspotItem): string {
+  return item.evidenceSourceNames[0] || providerLabel(item.evidenceProviders[0] ?? "rss");
 }
 
 function cleanText(value: string): string {
@@ -820,6 +772,11 @@ function cleanText(value: string): string {
     .replace(/&gt;/g, ">")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function trimText(value: string, maxLength: number): string {
+  if (value.length <= maxLength) return value;
+  return `${value.slice(0, maxLength - 1)}…`;
 }
 
 function providerLabel(value: string): string {
@@ -837,21 +794,21 @@ function reliabilityLabel(value: string | null): string {
 }
 
 function formatInteraction(item: HotspotItem): string {
-  // 优先显示实际互动量
   const parts: string[] = [];
   if (item.interactionLikes > 0) parts.push(`${formatNumber(item.interactionLikes)}赞`);
   if (item.interactionReposts > 0) parts.push(`${formatNumber(item.interactionReposts)}转发`);
   if (item.interactionReplies > 0) parts.push(`${formatNumber(item.interactionReplies)}回复`);
   if (item.interactionViews > 0) parts.push(`${formatNumber(item.interactionViews)}浏览`);
-  
-  // 如果有实际互动量，返回
   if (parts.length > 0) return parts.join(" · ");
-  
-  // 无实际互动量
-  return "暂无互动数据";
+
+  return expectsVideoInteraction(item) ? "暂无互动数据" : "";
 }
 
-// 格式化数字（大于10000显示为万）
+function expectsVideoInteraction(item: HotspotItem): boolean {
+  const url = `${item.url} ${item.normalizedUrl}`.toLowerCase();
+  return /bilibili\.com\/video\/|\/video\/av|(?:^|\W)bv[0-9a-z]{8,}/i.test(url);
+}
+
 function formatNumber(num: number): string {
   if (num >= 10000) {
     return (num / 10000).toFixed(1).replace(/\.0$/, "") + "万";

@@ -56,12 +56,14 @@ flowchart TD
   B --> D
   E["30 分钟 worker"] --> D
   F["手动扫描 API"] --> D
-  D --> G["RSS/Google News RSS 采集"]
+  D --> G["RSS/RSSHub/可选 Google News 采集"]
   G --> H["标准化候选内容"]
-  H --> I["URL/标题/时间窗口去重"]
-  I --> J["OpenRouter AI 判别"]
-  J --> K["保存热点与评分"]
-  K --> L["站内未读徽标/列表"]
+  H --> I["恢复真实原文 URL / 解析短链"]
+  I --> J["B站互动量/站点简介补全"]
+  J --> K["URL/标题/时间窗口去重"]
+  K --> L["OpenRouter AI 判别"]
+  L --> M["保存热点与评分"]
+  M --> N["站内未读徽标/列表"]
 ```
 
 ## 推荐目录结构
@@ -112,7 +114,8 @@ E:\热点工具
 | `server/index.ts` | 启动 Express API，生产模式托管前端静态资源 |
 | `server/worker.ts` | 启动定时扫描任务 |
 | `server/routes/*` | API 路由，包括关键词、来源、热点、设置、扫描 |
-| `server/services/collector.ts` | 拉取 RSS/Google News RSS 并标准化内容 |
+| `server/services/collector.ts` | 拉取 RSS/RSSHub/可选 Google News 并标准化内容 |
+| `server/services/enrichment.ts` | 恢复真实原文 URL，并 Best-effort 补充 B站互动量和游戏网站简介 |
 | `server/services/ai.ts` | 调用 OpenRouter 或 Mock AI |
 | `server/services/scanner.ts` | 编排一次完整扫描流程 |
 | `server/services/dedupe.ts` | URL、标题近似、时间窗口去重 |
@@ -126,7 +129,7 @@ E:\热点工具
 | 工作台首页 | 展示扫描状态、未读数、热点列表 |
 | 关键词面板 | 新增、禁用、删除关键词 |
 | 来源面板 | 查看和编辑内置/自定义来源 |
-| 热点详情 | 展示 AI 摘要、评分、理由、原始链接 |
+| 热点流卡片 | 展示标题、简介、互动量与标题直跳原文 |
 | 设置面板 | 扫描频率、AI 模式、OpenRouter 配置状态 |
 
 ## API 设计
@@ -147,15 +150,16 @@ E:\热点工具
 | `GET` | `/api/items` | 获取热点列表 |
 | `PATCH` | `/api/items/:id/read` | 标记已读 |
 | `POST` | `/api/scan` | 手动触发扫描 |
+| `POST` | `/api/items/archive-stale` | 手动归档过期内容 |
 
 ## 数据表
 
 | 表 | 用途 | 关键新增字段 |
 |---|---|---|
 | `settings` | 保存扫描频率、AI 模式等配置 | — |
-| `keywords` | 保存用户关键词和热点范围 | `account_mode`：账号/话题自动识别 |
+| `keywords` | 保存用户关键词和热点范围 | `account_mode`、`account_platform`、`account_uid`、`account_url`：账号/话题自动识别 |
 | `sources` | 保存内置与自定义信息源 | `provider_type`、`reliability_tier`、`community_source`、`min_quality_score` |
-| `items` | 保存热点候选内容和状态 | `archived_at`：归档时间；`interaction_likes/reposts/replies/views`：互动量；`quality_score`、`quality_signals`、`evidence_count` |
+| `items` | 保存热点候选内容和状态 | `archived_at`：归档时间；`interaction_likes/reposts/replies/views`：互动量；`summary_source`、`interaction_source`、`quality_score`、`quality_signals`、`evidence_count` |
 | `ai_evaluations` | 保存 AI 结构化评分和理由 | — |
 | `scan_runs` | 保存扫描日志、耗时、错误 | — |
 | `item_evidence` | 保存多源证据合并记录 | provider、source、query、rank、URL 等 |
