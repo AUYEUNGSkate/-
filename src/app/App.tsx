@@ -1,6 +1,7 @@
 ﻿import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   BellDot,
+  CheckCircle2,
   CircleOff,
   Eye,
   Gauge,
@@ -230,7 +231,6 @@ export function App() {
             keywords={dashboard.keywords}
             keywordFilter={keywordFilter}
             onKeywordFilter={changeKeywordFilter}
-            onRead={markRead}
             onOpenOriginal={openOriginal}
             showArchived={showArchived}
             archivedItems={archivedItems}
@@ -403,7 +403,6 @@ function HotspotView({
   keywords,
   keywordFilter,
   onKeywordFilter,
-  onRead,
   onOpenOriginal,
   showArchived,
   archivedItems,
@@ -420,7 +419,6 @@ function HotspotView({
   keywords: Keyword[];
   keywordFilter: number | "all";
   onKeywordFilter: (id: number | "all") => void;
-  onRead: (item: HotspotItem) => void;
   onOpenOriginal: (item: HotspotItem) => void;
   showArchived: boolean;
   archivedItems: HotspotItem[];
@@ -514,7 +512,7 @@ function HotspotView({
             {items.length === 0 ? (
               <EmptyState title="暂无候选内容" body="当前筛选下没有新的有效资讯。" />
             ) : (
-              items.map((item) => <HotspotCard key={item.id} item={item} onRead={onRead} onOpenOriginal={onOpenOriginal} />)
+              items.map((item) => <HotspotCard key={item.id} item={item} onOpenOriginal={onOpenOriginal} />)
             )}
           </div>
         )}
@@ -523,16 +521,24 @@ function HotspotView({
   );
 }
 
-function HotspotCard({ item, onRead, onOpenOriginal }: { item: HotspotItem; onRead: (item: HotspotItem) => void; onOpenOriginal: (item: HotspotItem) => void }) {
+function HotspotCard({ item, onOpenOriginal }: { item: HotspotItem; onOpenOriginal: (item: HotspotItem) => void }) {
   const unread = item.status === "new" && !item.readAt;
   const priority = getPriority(item);
   const interaction = formatInteraction(item);
 
   return (
     <article className={unread ? "signal-item unread" : "signal-item"}>
-      <div className={`priority-badge ${priority.tone}`}>
-        <Zap className="size-3" />
-        {priority.label}
+      <div className="signal-card-top">
+        <div className={`priority-badge ${priority.tone}`}>
+          <Zap className="size-3" />
+          {priority.label}
+        </div>
+        {!unread && item.readAt ? (
+          <span className="read-badge">
+            <CheckCircle2 className="size-3" />
+            已读
+          </span>
+        ) : null}
       </div>
       <div className="signal-copy">
         <div className="signal-source">
@@ -559,13 +565,6 @@ function HotspotCard({ item, onRead, onOpenOriginal }: { item: HotspotItem; onRe
           <span>{formatDate(item.publishedAt)}</span>
           {interaction ? <span>{interaction}</span> : null}
         </div>
-      </div>
-      <div className="signal-actions">
-        {!item.readAt ? (
-          <button className="ghost-action" onClick={() => onRead(item)}>
-            标记已读
-          </button>
-        ) : null}
       </div>
     </article>
   );

@@ -4,7 +4,7 @@ export type RecommendedAction = "notify" | "watch" | "ignore";
 export type ProviderType = "rss" | "google_news" | "brave_search";
 export type ReliabilityTier = "official" | "trusted" | "community" | "search";
 export type SummarySource = "ai" | "rss" | "metadata" | "title";
-export type InteractionSource = "bilibili" | "html" | "rss" | "none";
+export type InteractionSource = "bilibili" | "zhihu" | "wechat" | "html" | "rss" | "none";
 
 export interface Keyword {
   id: number;

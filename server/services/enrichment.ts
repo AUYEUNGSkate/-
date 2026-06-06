@@ -57,7 +57,15 @@ export async function enrichUrl(url: string, html = ""): Promise<EnrichmentResul
     const result = await enrichBilibiliVideo({ bvid, aid });
     return result ? { ...result, url, normalizedUrl: normalizeUrl(url) } : null;
   }
-  if (isGameSite(url)) {
+  if (isZhihu(url)) {
+    const result = await enrichZhihu(url);
+    return result ? { ...result, url, normalizedUrl: normalizeUrl(url) } : null;
+  }
+  if (isWechatMp(url)) {
+    const result = await enrichWechatMp(url, html);
+    return result ? { ...result, url, normalizedUrl: normalizeUrl(url) } : null;
+  }
+  if (isGameSite(url) || isArticleSite(url)) {
     const result = await enrichHtmlMetadata(url, html);
     return result ? { ...result, url, normalizedUrl: normalizeUrl(url) } : null;
   }
@@ -113,6 +121,53 @@ export async function enrichBilibiliVideo(input: { bvid?: string; aid?: string }
     interactionReplies: data.stat?.reply ?? 0,
     interactionViews: data.stat?.view ?? 0,
     interactionSource: "bilibili"
+  };
+}
+
+export async function enrichZhihu(url: string): Promise<EnrichmentResult | null> {
+  const html = await fetchText(url);
+  // 赞同数
+  const likesMatch = html.match(/class="[^"]*Button.*?VoteButton.*?"[^>]*>[\s\S]*?(\d[\d,]*(?:,\d{3})*(?:\.\d+)?[kKwW万万]?)[\s\S]*?<\/button>/i) ??
+    html.match(/"voteupCount"\s*:\s*(\d+)/i) ??
+    html.match(/赞同[：:\s]*(\d[\d,]*(?:[kKwW万万])?)/i);
+  // 评论数  
+  const repliesMatch = html.match(/"commentCount"\s*:\s*(\d+)/i) ??
+    html.match(/评论[：:\s]*(\d[\d,]*(?:[kKwW万万])?)/i);
+  // 阅读数
+  const viewsMatch = html.match(/"visitCount"\s*:\s*(\d+)/i) ??
+    html.match(/浏览[：:\s]*(\d[\d,]*(?:[kKwW万万])?)/i);
+  
+  if (!likesMatch && !repliesMatch && !viewsMatch) return null;
+  return {
+    summary: metaContent(html, "description") || metaContent(html, "og:description"),
+    summarySource: "metadata",
+    interactionLikes: likesMatch ? parseInt(likesMatch[1].replace(/[,，]/g, ""), 10) : 0,
+    interactionReplies: repliesMatch ? parseInt(repliesMatch[1].replace(/[,，]/g, ""), 10) : 0,
+    interactionViews: viewsMatch ? parseInt(viewsMatch[1].replace(/[,，]/g, ""), 10) : 0,
+    interactionSource: "zhihu"
+  };
+}
+
+export async function enrichWechatMp(url: string, existingHtml = ""): Promise<EnrichmentResult | null> {
+  const html = existingHtml || await fetchText(url);
+  // 阅读数
+  const viewsMatch = html.match(/var\s+read_num\s*=\s*(\d+)/i) ??
+    html.match(/"read_num"\s*:\s*(\d+)/i) ??
+    html.match(/var\s+readNum\s*=\s*(\d+)/i) ??
+    html.match(/阅读[：:\s]*(\d[\d,]*(?:[kKwW万万])?)/i);
+  // 点赞数
+  const likesMatch = html.match(/var\s+like_num\s*=\s*(\d+)/i) ??
+    html.match(/"like_num"\s*:\s*(\d+)/i) ??
+    html.match(/var\s+likeNum\s*=\s*(\d+)/i) ??
+    html.match(/点赞[：:\s]*(\d[\d,]*(?:[kKwW万万])?)/i);
+  
+  if (!viewsMatch && !likesMatch) return null;
+  return {
+    summary: metaContent(html, "description") || metaContent(html, "og:description"),
+    summarySource: "metadata",
+    interactionLikes: likesMatch ? parseInt(likesMatch[1].replace(/[,，]/g, ""), 10) : 0,
+    interactionViews: viewsMatch ? parseInt(viewsMatch[1].replace(/[,，]/g, ""), 10) : 0,
+    interactionSource: "wechat"
   };
 }
 
@@ -211,6 +266,31 @@ function isGameSite(value: string): boolean {
   try {
     const host = new URL(value).hostname.toLowerCase();
     return GAME_SITE_HOSTS.some((entry) => host === entry || host.endsWith(`.${entry}`));
+  } catch {
+    return false;
+  }
+}
+
+function isZhihu(value: string): boolean {
+  return /zhihu\.com/.test(value);
+}
+
+function isWechatMp(value: string): boolean {
+  return /mp\.weixin\.qq\.com/.test(value);
+}
+
+function isArticleSite(value: string): boolean {
+  try {
+    const host = new URL(value).hostname.toLowerCase();
+    const articleHosts = [
+      "news.qq.com", "tech.qq.com", "game.qq.com",
+      "tech.sina.com.cn", "finance.sina.com.cn",
+      "tech.163.com", "game.163.com",
+      "it.sohu.com", "news.sohu.com",
+      "36kr.com", "geekpark.net",
+      "ithome.com", "cnbeta.com"
+    ];
+    return articleHosts.some((entry) => host === entry || host.endsWith(`.${entry}`));
   } catch {
     return false;
   }

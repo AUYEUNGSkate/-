@@ -25,7 +25,7 @@ export interface CollectedItem {
   interactionReplies: number;
   interactionViews: number;
   summarySource: "ai" | "rss" | "metadata" | "title";
-  interactionSource: "bilibili" | "html" | "rss" | "none";
+  interactionSource: "bilibili" | "zhihu" | "wechat" | "html" | "rss" | "none";
 }
 
 const parser = new XMLParser({
