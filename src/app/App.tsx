@@ -17,6 +17,8 @@ import {
   Trash2,
   Zap
 } from "lucide-react";
+import { HoverBorderGradient } from "@/components/ui/hover-border-gradient";
+import { Spotlight } from "@/components/ui/spotlight";
 import type { AiMode, DashboardPayload, HotspotItem, Keyword } from "../../shared/types";
 import { api, formatDate } from "../api-client/client";
 
@@ -48,16 +50,22 @@ export function App() {
     setAiMode(dashboard.settings.aiMode);
   }, [dashboard]);
 
+  const visibleItems = useMemo(() => (dashboard ? getVisibleItems(dashboard.items, keywordFilter) : []), [dashboard, keywordFilter]);
+  const unreadItems = useMemo(() => (dashboard ? dashboard.items.filter((item) => !item.readAt).slice(0, 4) : []), [dashboard]);
+
   const selected = useMemo(() => {
     if (!dashboard) return null;
-    const visibleItems = getVisibleItems(dashboard.items, keywordFilter);
     return visibleItems.find((item) => item.id === selectedId) ?? visibleItems[0] ?? null;
-  }, [dashboard, keywordFilter, selectedId]);
+  }, [dashboard, selectedId, visibleItems]);
 
-  const visibleItems = useMemo(() => (dashboard ? getVisibleItems(dashboard.items, keywordFilter) : []), [dashboard, keywordFilter]);
   const featured = visibleItems[0] ?? null;
   const activeKeywords = dashboard?.keywords.filter((keyword) => keyword.enabled).length ?? 0;
   const activeSources = dashboard?.sources.filter((source) => source.enabled).length ?? 0;
+
+  function openHotspots(itemId?: number) {
+    setActiveView("hotspots");
+    if (itemId) setSelectedId(itemId);
+  }
 
   function changeKeywordFilter(next: number | "all") {
     setKeywordFilter(next);
@@ -126,8 +134,8 @@ export function App() {
 
   if (loading || !dashboard) {
     return (
-      <main className="min-h-screen bg-apple-canvas text-apple-ink grid place-items-center">
-        <div className="apple-loading">
+      <main className="radar-loading-shell">
+        <div className="radar-loading-card">
           <Loader2 className="size-5 animate-spin" />
           正在唤醒热点雷达
         </div>
@@ -136,51 +144,29 @@ export function App() {
   }
 
   return (
-    <main className="min-h-screen bg-apple-canvas text-apple-ink">
-      <TopNav unreadCount={dashboard.unreadCount} onRefresh={refresh} />
+    <main className="radar-page">
+      <TopNav
+        activeView={activeView}
+        unreadCount={dashboard.unreadCount}
+        unreadItems={unreadItems}
+        onRefresh={refresh}
+        onOpenHotspots={openHotspots}
+        onChangeView={setActiveView}
+      />
 
-      <section className="apple-hero">
-        <div className="apple-hero-copy">
-          <p className="apple-kicker">Game Hotspot Radar</p>
-          <h1>热点监控</h1>
-          <p>
-            主要跟踪国内平台和游戏媒体。每 {dashboard.settings.scanIntervalMinutes} 分钟自动扫描，AI 先做相关性、可信度和新鲜度初筛。
-          </p>
-          <div className="hero-status-line">
-            <span>{dashboard.items.length} 条候选</span>
-            <span>{dashboard.unreadCount} 条未读</span>
-            <span>国内平台优先</span>
-            <span>{dashboard.settings.openRouterConfigured ? "OpenRouter 已连接" : "Mock 模式"}</span>
-          </div>
-          <div className="apple-actions">
-            <button className="apple-primary" onClick={runScan} disabled={scanning}>
-              {scanning ? <Loader2 className="size-4 animate-spin" /> : <Zap className="size-4" />}
-              立即扫描
-            </button>
-            <button className="apple-secondary" onClick={() => setActiveView("monitor")}>
-              管理监控
-            </button>
-          </div>
-        </div>
+      <section className="workspace-shell compact-shell">
+        {error ? <div className="radar-error">{error}</div> : null}
 
-        <div className="apple-hero-visual">
-          <div className="signal-sphere">
-            <Radar className="size-12" />
-            <span>{dashboard.unreadCount}</span>
-            <small>待查看</small>
-          </div>
-          <div className="hero-mini-row">
-            <MiniMetric label="关键词" value={String(activeKeywords)} />
-            <MiniMetric label="来源" value={String(activeSources)} />
-            <MiniMetric label="AI" value={dashboard.settings.openRouterConfigured ? "Ready" : "Mock"} />
-          </div>
-        </div>
-      </section>
-
-      <section className="apple-shell">
-        {error ? <div className="apple-error">{error}</div> : null}
-
-        <SegmentedNav activeView={activeView} setActiveView={setActiveView} unreadCount={dashboard.unreadCount} />
+        <CommandDeck
+          featured={featured}
+          unreadCount={dashboard.unreadCount}
+          activeKeywords={activeKeywords}
+          activeSources={activeSources}
+          aiOnline={dashboard.settings.openRouterConfigured}
+          scanning={scanning}
+          onScan={runScan}
+          onManage={() => setActiveView("monitor")}
+        />
 
         {activeView === "hotspots" ? (
           <HotspotView
@@ -231,52 +217,143 @@ export function App() {
   );
 }
 
-function TopNav({ unreadCount, onRefresh }: { unreadCount: number; onRefresh: () => void }) {
+function TopNav({
+  activeView,
+  unreadCount,
+  unreadItems,
+  onRefresh,
+  onOpenHotspots,
+  onChangeView
+}: {
+  activeView: ViewKey;
+  unreadCount: number;
+  unreadItems: HotspotItem[];
+  onRefresh: () => void;
+  onOpenHotspots: (itemId?: number) => void;
+  onChangeView: (view: ViewKey) => void;
+}) {
+  const tabs: Array<{ key: ViewKey; label: string; icon: ReactNode }> = [
+    { key: "hotspots", label: "热点", icon: <Sparkles className="size-4" /> },
+    { key: "monitor", label: "关键词", icon: <Search className="size-4" /> },
+    { key: "sources", label: "来源", icon: <Rss className="size-4" /> }
+  ];
+
   return (
-    <header className="apple-nav">
-      <div className="apple-nav-inner">
-        <div className="apple-brand">
-          <Radar className="size-4" />
-          游戏热点雷达
-        </div>
-        <div className="apple-nav-actions">
-          <span className={unreadCount > 0 ? "apple-badge apple-badge-on" : "apple-badge"}>
-            <BellDot className="size-3.5" />
-            {unreadCount}
+    <header className="radar-nav">
+      <div className="radar-nav-inner compact-nav-inner">
+        <div className="radar-brand">
+          <span className="radar-brand-mark">
+            <Radar className="size-4" />
           </span>
-          <button className="apple-icon" onClick={onRefresh} title="刷新">
+          <div>
+            <strong>HotPulse</strong>
+          </div>
+        </div>
+
+        <nav className="top-nav-tabs" aria-label="页面视图">
+          {tabs.map((tab) => (
+            <button key={tab.key} className={activeView === tab.key ? "top-nav-item active" : "top-nav-item"} onClick={() => onChangeView(tab.key)}>
+              {tab.icon}
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+
+        <div className="radar-nav-actions">
+          <button className="radar-icon-button" onClick={onRefresh} title="刷新">
             <RefreshCcw className="size-4" />
           </button>
+
+          <div className="notify-wrap">
+            <button className={unreadCount > 0 ? "notify-button active" : "notify-button"} onClick={() => onOpenHotspots()}>
+              <BellDot className="size-4" />
+              <span>{unreadCount}</span>
+            </button>
+            <div className="notify-popover">
+              <div className="notify-popover-head">
+                <strong>未读热点</strong>
+                <span>{unreadCount}</span>
+              </div>
+              <div className="notify-list">
+                {unreadItems.length === 0 ? (
+                  <p className="notify-empty">已全部读完</p>
+                ) : (
+                  unreadItems.map((item) => (
+                    <button key={item.id} className="notify-item" onClick={() => onOpenHotspots(item.id)}>
+                      <strong>{item.title}</strong>
+                      <small>
+                        {item.matchedKeyword} · {formatDate(item.publishedAt)}
+                      </small>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </header>
   );
 }
 
-function SegmentedNav({
-  activeView,
-  setActiveView,
-  unreadCount
+function CommandDeck({
+  featured,
+  unreadCount,
+  activeKeywords,
+  activeSources,
+  aiOnline,
+  scanning,
+  onScan,
+  onManage
 }: {
-  activeView: ViewKey;
-  setActiveView: (view: ViewKey) => void;
+  featured: HotspotItem | null;
   unreadCount: number;
+  activeKeywords: number;
+  activeSources: number;
+  aiOnline: boolean;
+  scanning: boolean;
+  onScan: () => Promise<void>;
+  onManage: () => void;
 }) {
-  const tabs: Array<{ key: ViewKey; label: string; icon: ReactNode }> = [
-    { key: "hotspots", label: `热点 ${unreadCount ? `(${unreadCount})` : ""}`, icon: <Sparkles className="size-4" /> },
-    { key: "monitor", label: "监控", icon: <Search className="size-4" /> },
-    { key: "sources", label: "来源", icon: <Rss className="size-4" /> }
-  ];
-
   return (
-    <nav className="apple-segment" aria-label="页面视图">
-      {tabs.map((tab) => (
-        <button key={tab.key} className={activeView === tab.key ? "apple-segment-item active" : "apple-segment-item"} onClick={() => setActiveView(tab.key)}>
-          {tab.icon}
-          {tab.label}
-        </button>
-      ))}
-    </nav>
+    <section className="deck-panel">
+      <Spotlight className="deck-spotlight" fill="#60a5fa" />
+      <div className="deck-main">
+        <div className="deck-heading">
+          <h1>热点监控</h1>
+          {featured ? (
+            <a className="deck-headline" href={featured.url} target="_blank" rel="noreferrer">
+              <span>{featured.title}</span>
+            </a>
+          ) : null}
+        </div>
+
+        <div className="deck-stats">
+          <CompactMetric label="未读" value={String(unreadCount)} />
+          <CompactMetric label="关键词" value={String(activeKeywords)} />
+          <CompactMetric label="来源" value={String(activeSources)} />
+          <CompactMetric label="AI" value={aiOnline ? "Online" : "Mock"} />
+        </div>
+
+        <div className="deck-actions">
+          <HoverBorderGradient
+            as="button"
+            containerClassName="hero-action-primary"
+            surfaceClassName="hero-action-surface compact-action-surface"
+            onClick={() => void onScan()}
+            aria-label="立即扫描"
+          >
+            <span className="hero-action-content">
+              {scanning ? <Loader2 className="size-4 animate-spin" /> : <Zap className="size-4" />}
+              立即扫描
+            </span>
+          </HoverBorderGradient>
+          <button className="hero-secondary-button compact-secondary" onClick={onManage}>
+            管理关键词
+          </button>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -303,27 +380,24 @@ function HotspotView({
 }) {
   const activeKeywords = keywords.filter((keyword) => keyword.enabled);
   const keywordCounts = new Map<number, number>();
+
   for (const item of allItems) {
     if (item.keywordId === null) continue;
     keywordCounts.set(item.keywordId, (keywordCounts.get(item.keywordId) ?? 0) + 1);
   }
 
   return (
-    <div className="view-grid">
-      <section className="keyword-track" aria-label="固定关键词热点追踪">
-        <div>
-          <p className="apple-kicker">Tracking</p>
-          <h2>固定关键词追踪</h2>
-        </div>
-        <div className="keyword-track-list">
-          <button className={keywordFilter === "all" ? "keyword-track-item active" : "keyword-track-item"} onClick={() => onKeywordFilter("all")}>
+    <div className="hotspot-layout compact-layout">
+      <section className="surface-panel track-panel compact-track" aria-label="固定关键词热点追踪">
+        <div className="track-chip-row">
+          <button className={keywordFilter === "all" ? "track-chip active" : "track-chip"} onClick={() => onKeywordFilter("all")}>
             全部
             <span>{allItems.length}</span>
           </button>
           {activeKeywords.map((keyword) => (
             <button
               key={keyword.id}
-              className={keywordFilter === keyword.id ? "keyword-track-item active" : "keyword-track-item"}
+              className={keywordFilter === keyword.id ? "track-chip active" : "track-chip"}
               onClick={() => onKeywordFilter(keyword.id)}
               title={keyword.scope || keyword.term}
             >
@@ -334,31 +408,35 @@ function HotspotView({
         </div>
       </section>
 
-      <section className="apple-feature">
-        <p className="apple-kicker">Latest</p>
+      <section className="featured-strip">
         {featured ? (
           <>
-            <h2>{featured.title}</h2>
-            <p>{displaySummary(featured)}</p>
-            <a className="apple-link" href={featured.url} target="_blank" rel="noreferrer">
-              打开原文 <ExternalLink className="size-4" />
+            <div className="featured-strip-main">
+              <strong>{featured.title}</strong>
+              <small>
+                {featured.matchedKeyword} · {formatDate(featured.publishedAt)}
+              </small>
+            </div>
+            <a className="inline-link compact-link" href={featured.url} target="_blank" rel="noreferrer">
+              打开
+              <ExternalLink className="size-4" />
             </a>
           </>
         ) : (
-          <EmptyState title="还没有热点" body="添加关键词后点击立即扫描，热点会出现在这里。" />
+          <EmptyState title="还没有热点" body="添加关键词后点击扫描。" />
         )}
       </section>
 
-      <section className="apple-list-section">
-        <SectionHeader icon={<Sparkles className="size-4" />} title="热点列表" body="按关键词过滤后，只保留资讯题目和来源时间。" />
-        <div className="apple-list">
+      <section className="surface-panel list-panel compact-list-panel">
+        <SectionHeader icon={<Sparkles className="size-4" />} title="实时热点" />
+        <div className="signal-list">
           {items.length === 0 ? (
             <EmptyState title="暂无候选内容" body="这个关键词暂时没有新的有效资讯。" />
           ) : (
             items.map((item) => (
-              <button key={item.id} className={selected?.id === item.id ? "apple-list-item selected" : "apple-list-item"} onClick={() => onSelect(item.id)}>
-                <span className={item.status === "new" && !item.readAt ? "status-dot hot" : "status-dot"} />
-                <span className="list-copy">
+              <button key={item.id} className={selected?.id === item.id ? "signal-item selected" : "signal-item"} onClick={() => onSelect(item.id)}>
+                <span className={item.status === "new" && !item.readAt ? "signal-bullet active" : "signal-bullet"} />
+                <span className="signal-copy">
                   <strong>{item.title}</strong>
                   <small>
                     {item.matchedKeyword} · {formatDate(item.publishedAt)}
@@ -390,46 +468,46 @@ function MonitorView(props: {
   saveSettings: () => Promise<void>;
 }) {
   return (
-    <div className="settings-grid">
-      <section className="apple-section">
-        <SectionHeader icon={<Search className="size-4" />} title="监控关键词" body="把要盯的词和上下文分开写，AI 判断会更稳。" />
-        <div className="apple-form">
-          <input className="apple-input" value={props.keywordTerm} onChange={(event) => props.setKeywordTerm(event.target.value)} placeholder="关键词，例如 AI 编程" />
-          <input className="apple-input" value={props.keywordScope} onChange={(event) => props.setKeywordScope(event.target.value)} placeholder="范围，例如 游戏开发工具、引擎更新" />
-          <button className="apple-primary" onClick={props.addKeyword}>
+    <div className="control-grid compact-control-grid">
+      <section className="surface-panel control-panel">
+        <SectionHeader icon={<Search className="size-4" />} title="关键词" />
+        <div className="field-grid">
+          <input className="radar-input" value={props.keywordTerm} onChange={(event) => props.setKeywordTerm(event.target.value)} placeholder="关键词" />
+          <input className="radar-input" value={props.keywordScope} onChange={(event) => props.setKeywordScope(event.target.value)} placeholder="范围" />
+          <button className="solid-action-button" onClick={() => void props.addKeyword()}>
             <Plus className="size-4" />
-            添加关键词
+            添加
           </button>
         </div>
       </section>
 
-      <section className="apple-section">
-        <SectionHeader icon={<Gauge className="size-4" />} title="运行设置" body="默认 30 分钟扫描一次；真实 AI 会读取 OPEN_ROUTER。" />
-        <div className="apple-form two-col">
-          <label>
-            <span>扫描频率（分钟）</span>
-            <input className="apple-input" type="number" min={5} max={1440} value={props.scanInterval} onChange={(event) => props.setScanInterval(event.target.value)} />
+      <section className="surface-panel control-panel">
+        <SectionHeader icon={<Gauge className="size-4" />} title="设置" />
+        <div className="field-grid two-columns">
+          <label className="field-label">
+            <span>扫描频率</span>
+            <input className="radar-input" type="number" min={5} max={1440} value={props.scanInterval} onChange={(event) => props.setScanInterval(event.target.value)} />
           </label>
-          <label>
+          <label className="field-label">
             <span>AI 模式</span>
-            <select className="apple-input" value={props.aiMode} onChange={(event) => props.setAiMode(event.target.value as AiMode)}>
+            <select className="radar-input" value={props.aiMode} onChange={(event) => props.setAiMode(event.target.value as AiMode)}>
               <option value="openrouter">OpenRouter</option>
               <option value="mock">Mock</option>
             </select>
           </label>
-          <button className="apple-primary" onClick={props.saveSettings}>
-            保存设置
+          <button className="solid-action-button" onClick={() => void props.saveSettings()}>
+            保存
           </button>
         </div>
       </section>
 
-      <section className="apple-section wide">
-        <SectionHeader icon={<Settings2 className="size-4" />} title="已启用监控" body={`${props.dashboard.keywords.filter((keyword) => keyword.enabled).length} 个关键词正在参与扫描。`} />
-        <div className="chip-list">
+      <section className="surface-panel wide-panel">
+        <SectionHeader icon={<Settings2 className="size-4" />} title="已启用" />
+        <div className="stack-list">
           {props.dashboard.keywords.map((keyword) => (
-            <div key={keyword.id} className="apple-chip-row">
+            <div key={keyword.id} className="stack-row">
               <button
-                className={keyword.enabled ? "round-control on" : "round-control"}
+                className={keyword.enabled ? "row-icon-button active" : "row-icon-button"}
                 onClick={async () => {
                   await api.updateKeyword(keyword.id, { enabled: !keyword.enabled });
                   await props.refresh();
@@ -438,12 +516,12 @@ function MonitorView(props: {
               >
                 {keyword.enabled ? <Eye className="size-4" /> : <CircleOff className="size-4" />}
               </button>
-              <div>
+              <div className="row-copy">
                 <strong>{keyword.term}</strong>
                 <small>{keyword.scope || "未设置范围"}</small>
               </div>
               <button
-                className="round-control danger"
+                className="row-icon-button danger"
                 onClick={async () => {
                   await api.deleteKeyword(keyword.id);
                   await props.refresh();
@@ -472,27 +550,27 @@ function SourceView(props: {
   refresh: () => Promise<void>;
 }) {
   return (
-    <div className="settings-grid">
-      <section className="apple-section">
-        <SectionHeader icon={<Rss className="size-4" />} title="添加来源" body="RSS 地址可以包含 {query}，扫描时会替换成关键词和范围。" />
-        <div className="apple-form">
-          <input className="apple-input" value={props.sourceName} onChange={(event) => props.setSourceName(event.target.value)} placeholder="来源名称" />
-          <input className="apple-input" value={props.sourceUrl} onChange={(event) => props.setSourceUrl(event.target.value)} placeholder="RSS URL，可含 {query}" />
-          <input className="apple-input" value={props.sourceCategory} onChange={(event) => props.setSourceCategory(event.target.value)} placeholder="分类" />
-          <button className="apple-primary" onClick={props.addSource}>
+    <div className="control-grid compact-control-grid">
+      <section className="surface-panel control-panel">
+        <SectionHeader icon={<Rss className="size-4" />} title="添加来源" />
+        <div className="field-grid">
+          <input className="radar-input" value={props.sourceName} onChange={(event) => props.setSourceName(event.target.value)} placeholder="来源名称" />
+          <input className="radar-input" value={props.sourceUrl} onChange={(event) => props.setSourceUrl(event.target.value)} placeholder="RSS URL" />
+          <input className="radar-input" value={props.sourceCategory} onChange={(event) => props.setSourceCategory(event.target.value)} placeholder="分类" />
+          <button className="solid-action-button" onClick={() => void props.addSource()}>
             <Plus className="size-4" />
-            添加来源
+            添加
           </button>
         </div>
       </section>
 
-      <section className="apple-section wide">
-        <SectionHeader icon={<Rss className="size-4" />} title="来源列表" body={`${props.dashboard.sources.filter((source) => source.enabled).length} 个来源启用。内置来源会保留，只做禁用。`} />
-        <div className="source-table">
+      <section className="surface-panel wide-panel">
+        <SectionHeader icon={<Rss className="size-4" />} title="来源列表" />
+        <div className="stack-list">
           {props.dashboard.sources.map((source) => (
-            <div key={source.id} className="source-row">
+            <div key={source.id} className="stack-row">
               <button
-                className={source.enabled ? "round-control on" : "round-control"}
+                className={source.enabled ? "row-icon-button active" : "row-icon-button"}
                 onClick={async () => {
                   await api.updateSource(source.id, { enabled: !source.enabled });
                   await props.refresh();
@@ -501,11 +579,11 @@ function SourceView(props: {
               >
                 {source.enabled ? <Eye className="size-4" /> : <CircleOff className="size-4" />}
               </button>
-              <div>
+              <div className="row-copy">
                 <strong>{source.name}</strong>
                 <small>{source.category} · {source.builtin ? "内置" : "自定义"}</small>
               </div>
-              <span>{source.enabled ? "启用" : "暂停"}</span>
+              <span className="row-status">{source.enabled ? "启用" : "暂停"}</span>
             </div>
           ))}
         </div>
@@ -517,15 +595,18 @@ function SourceView(props: {
 function Inspector({ item, onRead }: { item: HotspotItem | null; onRead: (item: HotspotItem) => void }) {
   if (!item) {
     return (
-      <aside className="apple-inspector">
+      <aside className="inspector-panel compact-inspector">
         <EmptyState title="选择一个热点" body="AI 判读会显示在这里。" />
       </aside>
     );
   }
 
   return (
-    <aside className="apple-inspector">
-      <p className="apple-kicker">AI Reading</p>
+    <aside className="inspector-panel compact-inspector">
+      <div className="inspector-meta">
+        <span>{item.matchedKeyword}</span>
+        <span>{formatDate(item.publishedAt)}</span>
+      </div>
       <h3>{item.title}</h3>
       <p className="inspector-summary">{item.evaluation?.reason ?? "等待 AI 判别"}</p>
       <div className="inspector-note">
@@ -533,43 +614,46 @@ function Inspector({ item, onRead }: { item: HotspotItem | null; onRead: (item: 
       </div>
       <div className="inspector-actions">
         {!item.readAt ? (
-          <button className="apple-secondary" onClick={() => onRead(item)}>
+          <button className="hero-secondary-button compact-secondary" onClick={() => onRead(item)}>
             <CheckCircle2 className="size-4" />
             标记已读
           </button>
         ) : null}
-        <a className="apple-primary" href={item.url} target="_blank" rel="noreferrer">
-          打开原文
-        </a>
+        <HoverBorderGradient as="a" href={item.url} target="_blank" rel="noreferrer" surfaceClassName="hero-action-surface compact-action-surface">
+          <span className="hero-action-content">
+            打开原文
+            <ExternalLink className="size-4" />
+          </span>
+        </HoverBorderGradient>
       </div>
     </aside>
   );
 }
 
-function SectionHeader({ icon, title, body }: { icon: ReactNode; title: string; body: string }) {
+function CompactMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="section-header">
-      <span>{icon}</span>
-      <div>
-        <h2>{title}</h2>
-        <p>{body}</p>
-      </div>
-    </div>
-  );
-}
-
-function MiniMetric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="mini-metric">
+    <div className="compact-metric">
       <span>{label}</span>
       <strong>{value}</strong>
     </div>
   );
 }
 
+function SectionHeader({ icon, title, body }: { icon: ReactNode; title: string; body?: string }) {
+  return (
+    <div className="section-header compact-section-header">
+      <span>{icon}</span>
+      <div>
+        <h2>{title}</h2>
+        {body ? <p>{body}</p> : null}
+      </div>
+    </div>
+  );
+}
+
 function EmptyState({ title, body }: { title: string; body: string }) {
   return (
-    <div className="apple-empty">
+    <div className="empty-panel">
       <h3>{title}</h3>
       <p>{body}</p>
     </div>
