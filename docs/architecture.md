@@ -150,14 +150,24 @@ E:\热点工具
 
 ## 数据表
 
-| 表 | 用途 |
-|---|---|
-| `settings` | 保存扫描频率、AI 模式等配置 |
-| `keywords` | 保存用户关键词和热点范围 |
-| `sources` | 保存内置与自定义信息源 |
-| `items` | 保存热点候选内容和状态 |
-| `ai_evaluations` | 保存 AI 结构化评分和理由 |
-| `scan_runs` | 保存扫描日志、耗时、错误 |
+| 表 | 用途 | 关键新增字段 |
+|---|---|---|
+| `settings` | 保存扫描频率、AI 模式等配置 | — |
+| `keywords` | 保存用户关键词和热点范围 | `account_mode`：账号/话题自动识别 |
+| `sources` | 保存内置与自定义信息源 | `provider_type`、`reliability_tier`、`community_source`、`min_quality_score` |
+| `items` | 保存热点候选内容和状态 | `archived_at`：归档时间；`interaction_likes/reposts/replies/views`：互动量；`quality_score`、`quality_signals`、`evidence_count` |
+| `ai_evaluations` | 保存 AI 结构化评分和理由 | — |
+| `scan_runs` | 保存扫描日志、耗时、错误 | — |
+| `item_evidence` | 保存多源证据合并记录 | provider、source、query、rank、URL 等 |
+
+### 新增 API
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `GET` | `/api/items/archived` | 获取归档列表 |
+| `POST` | `/api/items/:id/restore` | 恢复单条归档 |
+| `POST` | `/api/items/batch-restore` | 批量恢复归档 |
+| `POST` | `/api/items/batch-delete` | 批量删除归档 |
 
 ## UI 方向
 

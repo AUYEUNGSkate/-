@@ -1,56 +1,61 @@
 # 项目进度记录
 
 更新时间：2026-06-06  
-当前提交：`5078758 Improve hotspot source reliability`
+当前提交：`5af1876 Content quality, domestic RSS sources, archive, and UI polish`
 
 ## 当前状态
 
 - Web 版前后端已可本机运行。
 - 后端 API、SQLite 持久化、worker 定时扫描、OpenRouter/Mock AI 判别已具备基础能力。
 - 前端工作台已支持热点列表、未读提醒、关键词管理、来源管理、设置管理和热点详情查看。
-- 本次已完成“多源可靠性升级”，重点解决低质量社区帖、分页、垃圾搜索结果混入，以及来源过于依赖 Google News RSS 的问题。
+- 本次已完成"信息质量与源扩展优化"，重点解决低质量社区帖混入、来源单一、旧信息堆积和 UI 穿模问题。
 
 ## 本次已完成
 
-- 后端新增统一采集 provider 模型：
-  - `rss`
-  - `google_news`
-  - `brave_search`
-- 新增可选 Brave Search 增强源：
-  - `.env.example` 已增加 `BRAVE_SEARCH_API_KEY`
-  - 未配置 Key 时自动跳过，不影响现有扫描
-- 扩展 `sources` 元数据：
-  - `provider_type`
-  - `reliability_tier`
-  - `community_source`
-  - `min_quality_score`
-- 新增 `item_evidence` 证据表：
-  - 记录 provider、来源、查询词、排名、原始 URL、规范化 URL、域名、标题、摘要、发布时间
-  - 多源命中同一内容时合并证据，不重复生成热点
-- 改进去重：
-  - Google News 结果尽量解析到原文 URL
-  - 中文标题相似度支持 CJK bigram，提升相似新闻合并能力
-- 新增质量评分：
-  - `qualityScore`
-  - `qualitySignals`
-  - 过滤或降级博彩垃圾、API 页、搜索结果页、论坛分页、薄社区内容
-- AI 判别加入可靠性上下文：
-  - 质量分
-  - 质量信号
-  - 证据数量
-  - 命中 provider
-  - 来源可靠性等级
-  - 是否社区来源
-- 新热点门槛升级：
-  - `qualityScore >= 70`
-  - 社区单源默认不进入未读新热点，除非有多源确认或高可信信号
-- 前端热点详情新增可靠性依据：
-  - 质量分
-  - 证据数
-  - 命中引擎
-  - 来源等级
-  - 质量信号
-- 来源列表新增 provider、可靠性等级、最低质量分展示。
+### 信息质量过滤
+- 社区源全部禁用（微博、B站、TapTap、知乎、贴吧），不再采集社区讨论帖。
+- 回复/评论内容检测与过滤：标题匹配「回复」「评论」「Re:」「@xxx」等模式后，质量评分 -60。
+- 从标题提取互动量（点赞、转发、回复、播放），分平台设置阈值（如微博点赞 ≥10、B站播放 ≥500 等），低于阈值 -50 分。
+- 无互动量的内容保留不受影响，只过滤明确低互动内容。
+
+### 信息源扩展
+- 新增 5 个国内可直接访问的 RSS 源（无需 API Key）：
+  - 机核网 (`gcores.com/rss`)
+  - 游民星空 (`rsshub.app/gamersky/news`)
+  - 3DM 游戏 (`rsshub.app/3dm/news`)
+  - 搜狐游戏 (`rsshub.app/sohu/game`)
+  - 网易游戏 (`rsshub.app/163/dy`)
+- 所有新源 `providerType: rss`，`reliabilityTier: trusted`，`communitySource: false`。
+
+### 账号/话题自动识别
+- 新增 `keywords.account_mode` 字段，添加关键词时自动检测是否为组织名/账号名。
+- 组织名检测规则：匹配 `公司/团队/工作室/官方` 等后缀，或 2-3 个中文字且无空格。
+- 账号模式下搜索 URL 不再拼接 scope 范围，直接搜索账号名。
+
+### 热点归档
+- 新增 `items.archived_at` 字段，已读信息 24 小时后自动归档。
+- 归档列表 API：`GET /api/items/archived`。
+- 支持单条恢复、批量恢复、批量删除。
+- 每次扫描完成后自动归档超期已读信息。
+- 前端新增「查看归档」按钮和归档列表视图。
+
+### UI 优化
+- 移除顶部精选热点横幅（featured-strip）。
+- 所有文本容器添加溢出截断（`text-overflow: ellipsis`），修复长标题穿模。
+- Inspector 面板标题限 2 行、摘要限 4 行显示。
+- 关键词 chip 设 `max-width: 140px`。
+- 去除 AI 热度分数回退逻辑，无互动量时显示「暂无互动数据」。
+- 互动量数字格式化：≥10000 显示为「万」、≥1000 显示为「k」。
+
+### 未读逻辑修复
+- 未读数统计改为所有未读项（不再限制 `status='new'`）。
+- 点击任意未读热点自动标记已读（之前仅对 `status='new'` 生效）。
+- 通知弹窗点击项自动标记已读并刷新。
+
+### 数据库新增字段
+- `items.archived_at`：归档时间
+- `items.interaction_likes / reposts / replies / views`：互动量
+- `keywords.account_mode`：账号模式标记
 
 ## 已验证
 
@@ -70,19 +75,18 @@
 - Vite 生产构建通过
 - 本地前端已可打开：`http://127.0.0.1:5173`
 - 本地后端已可访问：`http://127.0.0.1:8787`
-- `/api/dashboard` 已返回新的来源可靠性字段。
 
 ## 当前限制
 
 - Brave Search 是可选增强源，需要用户自行配置 `BRAVE_SEARCH_API_KEY`。
-- 未抓取社区详情页互动量；当前采用规则降级，避免反爬和维护成本。
-- 历史脏数据没有物理删除；新展示和新扫描逻辑会过滤或降级低质量内容。
-- Tavily、Exa 等更高成本搜索 API 暂未接入，只保留后续扩展方向。
+- RSSHub 桥接的源需确保 `rsshub.app` 在国内可访问。
+- 互动量提取仅从标题正则匹配，未调用平台 API 获取真实互动数据。
+- 作者粉丝数、认证优先等更精细的过滤维度需后续接入平台 API。
+- Tavily、Exa 等更高成本搜索 API 暂未接入。
 
 ## 下一步建议
 
 1. 配置真实 OpenRouter Key 后，用 `AI_MODE=openrouter` 做一次真实扫描验收。
-2. 可选配置 Brave Search Key，验证多 provider 证据是否明显提升结果质量。
-3. 针对实际扫描结果微调各来源的 `min_quality_score`。
-4. 观察 1-2 天后，再决定是否需要增加更强的付费搜索 API 或来源白名单。
-5. Web 版稳定后，再进入 Agent Skill 封装阶段。
+2. 验证国内外 RSS 源的实际抓取效果，调整 `min_quality_score`。
+3. 观察互动量提取的准确率，考虑接入平台 API 获取真实数据。
+4. Web 版稳定后，再进入 Agent Skill 封装阶段。
