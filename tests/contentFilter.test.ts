@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanArticleTitle, cleanSummary, isLowQualityResult } from "../server/services/contentFilter";
+import { assessContentQuality, cleanArticleTitle, cleanSummary, isLowQualityResult } from "../server/services/contentFilter";
 
 describe("content filter", () => {
   it("keeps article titles and strips common source suffixes", () => {
@@ -36,5 +36,15 @@ describe("content filter", () => {
         url: "https://example.com/news/unity-ai-tools"
       })
     ).toBe(false);
+  });
+
+  it("downgrades forum pagination and thin community pages", () => {
+    const result = assessContentQuality({
+      title: "量子跃迁：米乐光年- 官方论坛｜第 23 页 - TapTap - 发现好游戏",
+      url: "https://www.taptap.cn/forum/page/23",
+      summary: ""
+    });
+    expect(result.score).toBeLessThan(60);
+    expect(result.signals.join(" ")).toContain("分页");
   });
 });

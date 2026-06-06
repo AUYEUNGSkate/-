@@ -36,7 +36,7 @@ const RESPONSE_FORMAT = {
 };
 
 export async function evaluateItem(
-  item: Pick<HotspotItem, "title" | "summary" | "url" | "publishedAt" | "matchedKeyword">,
+  item: Pick<HotspotItem, "title" | "summary" | "url" | "publishedAt" | "matchedKeyword" | "qualityScore" | "qualitySignals" | "evidenceCount" | "evidenceProviders" | "sourceReliability" | "communitySource">,
   keyword: Keyword | null,
   source: Source | null
 ): Promise<AiEvaluation> {
@@ -53,11 +53,22 @@ export async function evaluateItem(
   }
 }
 
-export function shouldMarkNew(evaluation: AiEvaluation, publishedAt: string): boolean {
+export function shouldMarkNew(
+  evaluation: AiEvaluation,
+  publishedAt: string,
+  quality: Pick<HotspotItem, "qualityScore" | "evidenceCount" | "communitySource" | "sourceReliability">
+): boolean {
   const ageMs = Date.now() - new Date(publishedAt).getTime();
   const within24h = Number.isNaN(ageMs) || ageMs <= 24 * 60 * 60 * 1000;
+  const communityConfirmed =
+    !quality.communitySource ||
+    quality.evidenceCount >= 2 ||
+    quality.sourceReliability === "official" ||
+    evaluation.credibilityScore >= 82;
   return (
     within24h &&
+    quality.qualityScore >= 70 &&
+    communityConfirmed &&
     evaluation.relevanceScore >= 70 &&
     evaluation.credibilityScore >= 65 &&
     evaluation.noveltyScore >= 60 &&
@@ -68,7 +79,7 @@ export function shouldMarkNew(evaluation: AiEvaluation, publishedAt: string): bo
 }
 
 async function evaluateWithOpenRouter(
-  item: Pick<HotspotItem, "title" | "summary" | "url" | "publishedAt" | "matchedKeyword">,
+  item: Pick<HotspotItem, "title" | "summary" | "url" | "publishedAt" | "matchedKeyword" | "qualityScore" | "qualitySignals" | "evidenceCount" | "evidenceProviders" | "sourceReliability" | "communitySource">,
   keyword: Keyword | null,
   source: Source | null
 ): Promise<AiEvaluation> {
@@ -94,7 +105,20 @@ async function evaluateWithOpenRouter(
           content: JSON.stringify({
             keyword: keyword?.term ?? item.matchedKeyword,
             scope: keyword?.scope ?? "",
-            source: source ? { name: source.name, category: source.category, url: source.url } : null,
+            source: source ? {
+              name: source.name,
+              category: source.category,
+              url: source.url,
+              providerType: source.providerType,
+              reliabilityTier: source.reliabilityTier,
+              communitySource: source.communitySource,
+              minQualityScore: source.minQualityScore
+            } : null,
+            qualitySignals: item.qualitySignals,
+            evidenceCount: item.evidenceCount,
+            evidenceProviders: item.evidenceProviders,
+            sourceReliability: item.sourceReliability,
+            communitySource: item.communitySource,
             item
           })
         }
@@ -115,7 +139,7 @@ async function evaluateWithOpenRouter(
 }
 
 function mockEvaluation(
-  item: Pick<HotspotItem, "title" | "summary" | "url" | "publishedAt" | "matchedKeyword">,
+  item: Pick<HotspotItem, "title" | "summary" | "url" | "publishedAt" | "matchedKeyword" | "qualityScore" | "qualitySignals" | "evidenceCount" | "evidenceProviders" | "sourceReliability" | "communitySource">,
   keyword: Keyword | null,
   source: Source | null
 ): AiEvaluation {
@@ -124,7 +148,8 @@ function mockEvaluation(
   const techSignals = ["ai", "unity", "unreal", "steam", "agent", "编程", "游戏", "出海", "发行", "引擎"];
   const signalHits = techSignals.filter((signal) => haystack.includes(signal.toLowerCase())).length;
   const relevance = haystack.includes(term) ? 82 : Math.min(65 + signalHits * 6, 86);
-  const credibility = source?.builtin ? 72 : 66;
+  const credibilityBase = source?.reliabilityTier === "official" ? 86 : source?.reliabilityTier === "trusted" ? 78 : source?.reliabilityTier === "community" ? 58 : 70;
+  const credibility = Math.min(95, credibilityBase + Math.max(0, item.evidenceCount - 1) * 8 + Math.floor((item.qualityScore - 70) / 4));
   const novelty = Date.now() - new Date(item.publishedAt).getTime() <= 24 * 60 * 60 * 1000 ? 78 : 52;
   const hotness = Math.min(58 + signalHits * 8 + (relevance > 75 ? 8 : 0), 92);
   const suspicious = /免费领取|破解|内部绝密|必看爆料/.test(item.title);
@@ -137,8 +162,8 @@ function mockEvaluation(
     summary: item.summary ? cleanSummary(item.summary).slice(0, 120) : cleanArticleTitle(item.title),
     reason: suspicious
       ? "标题存在明显营销或爆料话术，先降级为待观察。"
-      : "Mock 模式基于关键词、技术信号、来源类型和发布时间给出临时评分。",
-    recommendedAction: !suspicious && relevance >= 70 && hotness >= 70 ? "notify" : "watch"
+      : `Mock 模式基于关键词、质量分 ${item.qualityScore}、${item.evidenceCount} 条证据和来源等级给出临时评分。`,
+    recommendedAction: !suspicious && item.qualityScore >= 70 && relevance >= 70 && hotness >= 70 ? "notify" : "watch"
   });
 }
 

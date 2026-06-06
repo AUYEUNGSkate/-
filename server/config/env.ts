@@ -10,6 +10,7 @@ export interface EnvConfig {
   openRouterModel: string;
   openRouterReferer: string;
   openRouterTitle: string;
+  braveSearchApiKey: string;
 }
 
 export function getEnv(): EnvConfig {
@@ -21,6 +22,7 @@ export function getEnv(): EnvConfig {
     openRouterApiKey: process.env.OPEN_ROUTER ?? process.env.OPENROUTER_API_KEY ?? "",
     openRouterModel: process.env.OPENROUTER_MODEL ?? "deepseek/deepseek-v4-flash",
     openRouterReferer: process.env.OPENROUTER_REFERER ?? "http://localhost:5173",
-    openRouterTitle: process.env.OPENROUTER_TITLE ?? "Game Hotspot Radar"
+    openRouterTitle: process.env.OPENROUTER_TITLE ?? "Game Hotspot Radar",
+    braveSearchApiKey: process.env.BRAVE_SEARCH_API_KEY ?? ""
   };
 }

@@ -581,7 +581,9 @@ function SourceView(props: {
               </button>
               <div className="row-copy">
                 <strong>{source.name}</strong>
-                <small>{source.category} · {source.builtin ? "内置" : "自定义"}</small>
+                <small>
+                  {source.category} · {providerLabel(source.providerType)} · {reliabilityLabel(source.reliabilityTier)} · 最低质量 {source.minQualityScore}
+                </small>
               </div>
               <span className="row-status">{source.enabled ? "启用" : "暂停"}</span>
             </div>
@@ -606,11 +608,19 @@ function Inspector({ item, onRead }: { item: HotspotItem | null; onRead: (item: 
       <div className="inspector-meta">
         <span>{item.matchedKeyword}</span>
         <span>{formatDate(item.publishedAt)}</span>
+        <span>质量 {item.qualityScore}</span>
+        <span>证据 {item.evidenceCount}</span>
       </div>
       <h3>{item.title}</h3>
       <p className="inspector-summary">{item.evaluation?.reason ?? "等待 AI 判别"}</p>
+      <div className="reliability-grid">
+        <ReliabilityPill label="来源等级" value={reliabilityLabel(item.sourceReliability)} />
+        <ReliabilityPill label="社区单源" value={item.communitySource && item.evidenceCount < 2 ? "是" : "否"} />
+        <ReliabilityPill label="命中引擎" value={item.evidenceProviders.map(providerLabel).join(" / ") || "RSS"} />
+        <ReliabilityPill label="证据来源" value={item.evidenceSourceNames.slice(0, 3).join(" / ") || "当前来源"} />
+      </div>
       <div className="inspector-note">
-        {item.evaluation?.isImpersonationLikely ? "疑似假冒或标题党，暂不标为高优先。" : "未发现明显假冒信号。"}
+        {(item.qualitySignals.length ? item.qualitySignals : ["基础质量通过"]).join("；")}
       </div>
       <div className="inspector-actions">
         {!item.readAt ? (
@@ -633,6 +643,15 @@ function Inspector({ item, onRead }: { item: HotspotItem | null; onRead: (item: 
 function CompactMetric({ label, value }: { label: string; value: string }) {
   return (
     <div className="compact-metric">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function ReliabilityPill({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="reliability-pill">
       <span>{label}</span>
       <strong>{value}</strong>
     </div>
@@ -679,4 +698,18 @@ function cleanText(value: string): string {
     .replace(/&gt;/g, ">")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function providerLabel(value: string): string {
+  if (value === "google_news") return "Google News";
+  if (value === "brave_search") return "Brave";
+  return "RSS";
+}
+
+function reliabilityLabel(value: string | null): string {
+  if (value === "official") return "官方";
+  if (value === "trusted") return "可信";
+  if (value === "community") return "社区";
+  if (value === "search") return "搜索";
+  return "未知";
 }

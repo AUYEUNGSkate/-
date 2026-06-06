@@ -1,4 +1,3 @@
-import type { HotspotItem } from "../../shared/types";
 import { repositories } from "../db/client";
 import { collectFromSources } from "./collector";
 import { isWithinHours } from "./dedupe";
@@ -20,27 +19,31 @@ export async function runScan() {
     const sources = repositories.sources.active();
     const collected = await collectFromSources(keywords, sources);
     totals.fetched = collected.length;
+    const insertedItemIds = new Set<number>();
 
     for (const raw of collected) {
       if (!isWithinHours(raw.publishedAt, 24)) continue;
-      const itemId = repositories.items.insert(raw);
-      if (!itemId) continue;
-
-      totals.inserted += 1;
-      const keyword = keywords.find((entry) => entry.id === raw.keywordId) ?? null;
       const source = sources.find((entry) => entry.id === raw.sourceId) ?? null;
-      const itemForAi: Pick<HotspotItem, "title" | "summary" | "url" | "publishedAt" | "matchedKeyword"> = {
-        title: raw.title,
-        summary: raw.summary,
-        url: raw.url,
-        publishedAt: raw.publishedAt,
-        matchedKeyword: raw.matchedKeyword
-      };
-      const evaluation = await evaluateItem(itemForAi, keyword, source);
+      if (source && raw.qualityScore < source.minQualityScore) continue;
+
+      const result = repositories.items.insert(raw);
+      if (!result) continue;
+      if (result.inserted) {
+        totals.inserted += 1;
+        insertedItemIds.add(result.id);
+      }
+    }
+
+    for (const itemId of insertedItemIds) {
+      const item = repositories.items.byId(itemId);
+      if (!item) continue;
+      const keyword = item.keywordId ? keywords.find((entry) => entry.id === item.keywordId) ?? null : null;
+      const source = item.sourceId ? sources.find((entry) => entry.id === item.sourceId) ?? null : null;
+      const evaluation = await evaluateItem(item, keyword, source);
       repositories.items.addEvaluation(itemId, evaluation);
       repositories.items.updateStatus(
         itemId,
-        shouldMarkNew(evaluation, raw.publishedAt)
+        shouldMarkNew(evaluation, item.publishedAt, item)
           ? "new"
           : evaluation.recommendedAction === "ignore"
             ? "ignored"

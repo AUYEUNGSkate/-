@@ -736,6 +736,39 @@ button:disabled {
   line-height: 1.7;
 }
 
+.reliability-grid {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.reliability-pill {
+  min-width: 0;
+  padding: 10px 11px;
+  border: 1px solid rgba(147, 197, 253, 0.12);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.reliability-pill span {
+  display: block;
+  color: rgba(191, 219, 254, 0.72);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+}
+
+.reliability-pill strong {
+  display: block;
+  margin-top: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: white;
+  font-size: 13px;
+}
+
 .inspector-note {
   margin-top: 14px;
   padding: 14px 16px;

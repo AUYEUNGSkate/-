@@ -1,6 +1,8 @@
 export type AiMode = "openrouter" | "mock";
 
 export type RecommendedAction = "notify" | "watch" | "ignore";
+export type ProviderType = "rss" | "google_news" | "brave_search";
+export type ReliabilityTier = "official" | "trusted" | "community" | "search";
 
 export interface Keyword {
   id: number;
@@ -15,6 +17,10 @@ export interface Source {
   name: string;
   url: string;
   category: string;
+  providerType: ProviderType;
+  reliabilityTier: ReliabilityTier;
+  communitySource: boolean;
+  minQualityScore: number;
   enabled: boolean;
   builtin: boolean;
   createdAt: string;
@@ -33,6 +39,13 @@ export interface HotspotItem {
   matchedKeyword: string;
   readAt: string | null;
   status: "new" | "watch" | "ignored";
+  qualityScore: number;
+  qualitySignals: string[];
+  evidenceCount: number;
+  evidenceProviders: ProviderType[];
+  evidenceSourceNames: string[];
+  sourceReliability: ReliabilityTier | null;
+  communitySource: boolean;
   evaluation: AiEvaluation | null;
 }
 

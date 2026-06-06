@@ -9,6 +9,21 @@ const SPAM_PATTERNS = [
 ];
 
 const GENERIC_TITLES = new Set(["微博正文", "知乎", "首页", "搜索结果", "results"]);
+const COMMUNITY_HOSTS = [/taptap\.cn$/i, /zhihu\.com$/i, /tieba\.baidu\.com$/i, /weibo\.com$/i, /bilibili\.com$/i];
+const FORUM_PAGE_PATTERNS = [
+  /第\s*\d+\s*页/,
+  /\bpage[=/_-]?\d+\b/i,
+  /\/forum\//i,
+  /\/topic\//i,
+  /\/post\//i,
+  /\/question\//i
+];
+
+export interface QualityAssessment {
+  score: number;
+  signals: string[];
+  lowQuality: boolean;
+}
 
 export function cleanArticleTitle(title: string): string {
   const decoded = decodeHtml(title)
@@ -29,19 +44,69 @@ export function cleanArticleTitle(title: string): string {
 }
 
 export function isLowQualityResult(input: { title: string; url?: string; summary?: string }): boolean {
+  return assessContentQuality(input).lowQuality;
+}
+
+export function assessContentQuality(input: { title: string; url?: string; summary?: string }): QualityAssessment {
   const title = cleanArticleTitle(input.title);
   const haystack = `${input.title} ${input.url ?? ""} ${input.summary ?? ""}`;
-  if (!title || title.length < 6) return true;
-  if (GENERIC_TITLES.has(title.toLowerCase())) return true;
-  if (SPAM_PATTERNS.some((pattern) => pattern.test(haystack))) return true;
+  const signals: string[] = [];
+  let score = 92;
+
+  if (!title || title.length < 6) {
+    signals.push("标题过短或缺失");
+    score -= 55;
+  }
+  if (GENERIC_TITLES.has(title.toLowerCase())) {
+    signals.push("泛化页面标题");
+    score -= 60;
+  }
+  if (SPAM_PATTERNS.some((pattern) => pattern.test(haystack))) {
+    signals.push("命中垃圾/博彩模式");
+    score -= 75;
+  }
 
   const symbolCount = (title.match(/[{}【】[\]".|]/g) ?? []).length;
-  if (symbolCount >= 5) return true;
+  if (symbolCount >= 5) {
+    signals.push("标题符号异常");
+    score -= 35;
+  }
 
   const latinAndDigits = (title.match(/[A-Za-z0-9]/g) ?? []).length;
-  if (latinAndDigits > 24 && /[{}]|\.com|\.tw|\.pw|\.ojd|\.cls/i.test(title)) return true;
+  if (latinAndDigits > 24 && /[{}]|\.com|\.tw|\.pw|\.ojd|\.cls/i.test(title)) {
+    signals.push("疑似搜索垃圾标题");
+    score -= 45;
+  }
 
-  return false;
+  if (!input.summary?.trim()) {
+    signals.push("摘要缺失");
+    score -= 12;
+  }
+
+  const host = hostname(input.url ?? "");
+  const communityHost = COMMUNITY_HOSTS.some((pattern) => pattern.test(host));
+  if (communityHost) {
+    signals.push("社区平台单条信号");
+    score -= 10;
+  }
+
+  if (FORUM_PAGE_PATTERNS.some((pattern) => pattern.test(haystack))) {
+    signals.push("疑似论坛/分页内容");
+    score -= 32;
+  }
+
+  if (/api\./i.test(host) || /\/api\//i.test(input.url ?? "")) {
+    signals.push("API 页面");
+    score -= 45;
+  }
+
+  score = Math.max(0, Math.min(100, score));
+
+  return {
+    score,
+    signals: signals.length ? signals : ["基础质量通过"],
+    lowQuality: score < 45
+  };
 }
 
 export function cleanSummary(value: string): string {
@@ -57,6 +122,14 @@ export function cleanSummary(value: string): string {
     return cleanArticleTitle(cleaned);
   }
   return cleaned;
+}
+
+function hostname(url: string): string {
+  try {
+    return new URL(url).hostname.toLowerCase();
+  } catch {
+    return "";
+  }
 }
 
 function decodeHtml(value: string): string {
