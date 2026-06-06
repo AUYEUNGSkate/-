@@ -87,6 +87,48 @@ app.patch("/api/items/:id/read", (req, res) => {
   res.json({ ok: repositories.items.markRead(Number(req.params.id)), unreadCount: repositories.items.unreadCount() });
 });
 
+app.get("/api/items/archived", (req, res) => {
+  const limit = Number(req.query.limit ?? 100);
+  res.json(repositories.items.archived(limit));
+});
+
+app.post("/api/items/:id/restore", (req, res) => {
+  res.json({ ok: repositories.items.restore(Number(req.params.id)) });
+});
+
+app.post("/api/items/batch-restore", (req, res) => {
+  const { ids } = req.body as { ids?: number[] };
+  if (!ids?.length) return res.status(400).json({ error: "ids is required" });
+  res.json({ ok: repositories.items.batchRestore(ids) });
+});
+
+app.post("/api/items/batch-delete", (req, res) => {
+  const { ids } = req.body as { ids?: number[] };
+  if (!ids?.length) return res.status(400).json({ error: "ids is required" });
+  res.json({ ok: repositories.items.batchDelete(ids) });
+});
+
+app.get("/api/items/archived", (req, res) => {
+  const limit = Number(req.query.limit ?? 100);
+  res.json(repositories.items.archived(limit));
+});
+
+app.post("/api/items/:id/restore", (req, res) => {
+  res.json({ ok: repositories.items.restore(Number(req.params.id)) });
+});
+
+app.post("/api/items/batch-restore", (req, res) => {
+  const { ids } = req.body as { ids?: number[] };
+  if (!ids?.length) return res.status(400).json({ error: "ids is required" });
+  res.json({ ok: repositories.items.batchRestore(ids) });
+});
+
+app.post("/api/items/batch-delete", (req, res) => {
+  const { ids } = req.body as { ids?: number[] };
+  if (!ids?.length) return res.status(400).json({ error: "ids is required" });
+  res.json({ ok: repositories.items.batchDelete(ids) });
+});
+
 app.post("/api/scan", async (_req, res, next) => {
   try {
     const result = await runScan();

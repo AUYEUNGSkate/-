@@ -1,4 +1,4 @@
-const SPAM_PATTERNS = [
+﻿const SPAM_PATTERNS = [
   /results\s+for/i,
   /bet365/i,
   /博彩|彩票|开奖|开户地址|体育投注|体育综合版|极速赛车|北京赛车|快三|盘口|代理/i,
@@ -47,7 +47,13 @@ export function isLowQualityResult(input: { title: string; url?: string; summary
   return assessContentQuality(input).lowQuality;
 }
 
-export function assessContentQuality(input: { title: string; url?: string; summary?: string }): QualityAssessment {
+export function assessContentQuality(input: { 
+  title: string; 
+  url?: string; 
+  summary?: string;
+  sourceName?: string;
+  sourceCommunity?: boolean;
+}): QualityAssessment {
   const title = cleanArticleTitle(input.title);
   const haystack = `${input.title} ${input.url ?? ""} ${input.summary ?? ""}`;
   const signals: string[] = [];
@@ -90,6 +96,31 @@ export function assessContentQuality(input: { title: string; url?: string; summa
     score -= 10;
   }
 
+  // 新增：社区平台互动量检查
+  if (input.sourceCommunity && input.sourceName) {
+    const platform = identifyPlatform(input.sourceName, input.url || '');
+    
+    // 检查是否是回复内容
+    if (isReplyContent(title)) {
+      signals.push("回复/评论内容");
+      score -= 60;
+    }
+    
+    // 提取互动量
+    const counts = extractInteractionCounts(title);
+    const hasInteraction = counts.likes > 0 || counts.reposts > 0 || counts.replies > 0 || counts.views > 0;
+    
+    // 如果有互动量信息，检查是否达到阈值
+    if (hasInteraction) {
+      const thresholdCheck = checkInteractionThresholds(platform, counts);
+      if (!thresholdCheck.passed) {
+        signals.push(thresholdCheck.reason);
+        score -= 50;
+      }
+    }
+    // 没有互动量信息的内容保留，不降低评分
+  }
+
   if (FORUM_PAGE_PATTERNS.some((pattern) => pattern.test(haystack))) {
     signals.push("疑似论坛/分页内容");
     score -= 32;
@@ -122,6 +153,101 @@ export function cleanSummary(value: string): string {
     return cleanArticleTitle(cleaned);
   }
   return cleaned;
+}
+
+// 平台类型
+type Platform = 'weibo' | 'bilibili' | 'taptap' | 'zhihu' | 'tieba' | 'other';
+
+// 根据source信息识别平台
+function identifyPlatform(sourceName: string, sourceUrl: string): Platform {
+  const name = sourceName.toLowerCase();
+  const url = sourceUrl.toLowerCase();
+  
+  if (name.includes('微博') || url.includes('weibo.com')) return 'weibo';
+  if (name.includes('b站') || name.includes('bilibili') || url.includes('bilibili.com')) return 'bilibili';
+  if (name.includes('taptap') || url.includes('taptap.cn')) return 'taptap';
+  if (name.includes('知乎') || url.includes('zhihu.com')) return 'zhihu';
+  if (name.includes('贴吧') || url.includes('tieba.baidu.com')) return 'tieba';
+  
+  return 'other';
+}
+
+// 检测是否是回复/评论内容
+function isReplyContent(title: string): boolean {
+  const replyPatterns = [
+    /^回复[:：]/,
+    /^Re[:：]/i,
+    /^回复@/,
+    /的回复$/,
+    /的评论$/,
+    /^评论[:：]/,
+    /^@[\w]+[\s：:]/,
+    /^回复\s/,
+  ];
+  return replyPatterns.some(pattern => pattern.test(title.trim()));
+}
+
+// 从标题中提取互动量
+function extractInteractionCounts(title: string): {
+  likes: number;
+  reposts: number;
+  replies: number;
+  views: number;
+} {
+  const patterns = {
+    likes: /(\d+(?:\.\d+)?[kK万]?)\s*(?:赞|点赞|like|upvote|赞同)/i,
+    reposts: /(\d+(?:\.\d+)?[kK万]?)\s*(?:转发|repost|share)/i,
+    replies: /(\d+(?:\.\d+)?[kK万]?)\s*(?:回复|评论|comment|reply|回答|条评价|个回答)/i,
+    views: /(\d+(?:\.\d+)?[kK万]?)\s*(?:播放|浏览|view|阅读)/i,
+  };
+  
+  const result = { likes: 0, reposts: 0, replies: 0, views: 0 };
+  
+  for (const [key, pattern] of Object.entries(patterns)) {
+    const match = title.match(pattern);
+    if (match) {
+      result[key as keyof typeof result] = parseNumber(match[1]);
+    }
+  }
+  
+  return result;
+}
+
+// 解析数字（支持k、万等单位）
+function parseNumber(str: string): number {
+  const num = parseFloat(str);
+  if (str.toLowerCase().includes('k')) return num * 1000;
+  if (str.includes('万')) return num * 10000;
+  return num;
+}
+
+// 检查互动量是否达到阈值
+function checkInteractionThresholds(
+  platform: Platform,
+  counts: { likes: number; reposts: number; replies: number; views: number }
+): { passed: boolean; reason: string } {
+  switch (platform) {
+    case 'weibo':
+      if (counts.likes > 0 && counts.likes < 10) return { passed: false, reason: "点赞数" + counts.likes + "低于阈值10" };
+      if (counts.reposts > 0 && counts.reposts < 5) return { passed: false, reason: "转发数" + counts.reposts + "低于阈值5" };
+      break;
+    case 'bilibili':
+      if (counts.views > 0 && counts.views < 500) return { passed: false, reason: "播放量" + counts.views + "低于阈值500" };
+      if (counts.likes > 0 && counts.likes < 10) return { passed: false, reason: "点赞数" + counts.likes + "低于阈值10" };
+      break;
+    case 'taptap':
+      if (counts.replies > 0 && counts.replies < 5) return { passed: false, reason: "评价数" + counts.replies + "低于阈值5" };
+      break;
+    case 'zhihu':
+      if (counts.replies > 0 && counts.replies < 5) return { passed: false, reason: "回答数" + counts.replies + "低于阈值5" };
+      if (counts.likes > 0 && counts.likes < 10) return { passed: false, reason: "赞同数" + counts.likes + "低于阈值10" };
+      break;
+    case 'tieba':
+      if (counts.replies > 0 && counts.replies < 10) return { passed: false, reason: "回复数" + counts.replies + "低于阈值10" };
+      break;
+  }
+  
+  return { passed: true, reason: '' };
 }
 
 function hostname(url: string): string {

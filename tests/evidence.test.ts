@@ -50,7 +50,11 @@ describe("item evidence", () => {
       query: "Unity AI 游戏开发",
       rank: 1,
       qualityScore: 86,
-      qualitySignals: ["基础质量通过"]
+      qualitySignals: ["基础质量通过"],
+      interactionLikes: 0,
+      interactionReposts: 0,
+      interactionReplies: 0,
+      interactionViews: 0
     });
     const second = repositories.items.insert({
       sourceId: sourceB.id,
@@ -66,7 +70,11 @@ describe("item evidence", () => {
       query: "Unity AI 游戏开发",
       rank: 2,
       qualityScore: 88,
-      qualitySignals: ["基础质量通过"]
+      qualitySignals: ["基础质量通过"],
+      interactionLikes: 0,
+      interactionReposts: 0,
+      interactionReplies: 0,
+      interactionViews: 0
     });
 
     expect(first?.inserted).toBe(true);

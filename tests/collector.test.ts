@@ -7,6 +7,7 @@ const keyword: Keyword = {
   term: "AI 编程",
   scope: "游戏开发",
   enabled: true,
+  accountMode: false,
   createdAt: new Date().toISOString()
 };
 

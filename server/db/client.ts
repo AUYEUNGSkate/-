@@ -21,6 +21,10 @@ export interface RawItemInput {
   rank: number;
   qualityScore: number;
   qualitySignals: string[];
+  interactionLikes: number;
+  interactionReposts: number;
+  interactionReplies: number;
+  interactionViews: number;
 }
 
 export interface SourceInput {
@@ -154,6 +158,12 @@ function initializeSchema(db: Database.Database) {
   addColumnIfMissing(db, "items", "quality_score", "INTEGER NOT NULL DEFAULT 70");
   addColumnIfMissing(db, "items", "quality_signals", "TEXT NOT NULL DEFAULT '[]'");
   addColumnIfMissing(db, "items", "evidence_count", "INTEGER NOT NULL DEFAULT 1");
+  addColumnIfMissing(db, "items", "archived_at", "TEXT");
+  addColumnIfMissing(db, "items", "interaction_likes", "INTEGER NOT NULL DEFAULT 0");
+  addColumnIfMissing(db, "items", "interaction_reposts", "INTEGER NOT NULL DEFAULT 0");
+  addColumnIfMissing(db, "items", "interaction_replies", "INTEGER NOT NULL DEFAULT 0");
+  addColumnIfMissing(db, "items", "interaction_views", "INTEGER NOT NULL DEFAULT 0");
+  addColumnIfMissing(db, "keywords", "account_mode", "INTEGER NOT NULL DEFAULT 0");
 }
 
 function addColumnIfMissing(db: Database.Database, table: string, column: string, definition: string) {
@@ -378,16 +388,18 @@ export const repositories = {
       return rows.map(mapKeyword);
     },
     create(term: string, scope: string): Keyword {
-      const info = getDb().prepare("INSERT INTO keywords (term, scope) VALUES (?, ?)").run(term.trim(), scope.trim());
+      const accountMode = detectAccountMode(term.trim());
+      const info = getDb().prepare("INSERT INTO keywords (term, scope, account_mode) VALUES (?, ?, ?)").run(term.trim(), scope.trim(), Number(accountMode));
       return this.byId(Number(info.lastInsertRowid))!;
     },
-    update(id: number, input: Partial<Pick<Keyword, "term" | "scope" | "enabled">>): Keyword | null {
+    update(id: number, input: Partial<Pick<Keyword, "term" | "scope" | "enabled" | "accountMode">>): Keyword | null {
       const current = this.byId(id);
       if (!current) return null;
-      getDb().prepare("UPDATE keywords SET term = ?, scope = ?, enabled = ? WHERE id = ?").run(
+      getDb().prepare("UPDATE keywords SET term = ?, scope = ?, enabled = ?, account_mode = ? WHERE id = ?").run(
         input.term?.trim() ?? current.term,
         input.scope?.trim() ?? current.scope,
         typeof input.enabled === "boolean" ? Number(input.enabled) : Number(current.enabled),
+        typeof input.accountMode === "boolean" ? Number(input.accountMode) : Number(current.accountMode),
         id
       );
       return this.byId(id);
@@ -478,6 +490,10 @@ export const repositories = {
       const rows = getDb().prepare(`
         SELECT
           i.*,
+          i.interaction_likes,
+          i.interaction_reposts,
+          i.interaction_replies,
+          i.interaction_views,
           s.reliability_tier AS source_reliability,
           s.community_source AS source_community,
           e.relevance_score,
@@ -509,8 +525,51 @@ export const repositories = {
         .filter((item) => !isLowQualityResult({ title: item.title, url: item.url, summary: item.summary }));
     },
     unreadCount(): number {
-      const row = getDb().prepare("SELECT COUNT(*) AS count FROM items WHERE read_at IS NULL AND status = 'new'").get() as { count: number };
+      const row = getDb().prepare("SELECT COUNT(*) AS count FROM items WHERE read_at IS NULL AND archived_at IS NULL").get() as { count: number };
       return row.count;
+    },
+    archived(limit = 100): HotspotItem[] {
+      const rows = getDb().prepare(`SELECT
+        i.*,
+        i.interaction_likes,
+        i.interaction_reposts,
+        i.interaction_replies,
+        i.interaction_views,
+        s.reliability_tier AS source_reliability,
+        s.community_source AS source_community,
+        e.relevance_score,
+        e.credibility_score,
+        e.novelty_score,
+        e.hotness_score,
+        e.is_impersonation_likely,
+        e.summary AS ai_summary,
+        e.reason,
+        e.recommended_action,
+        (SELECT json_group_array(DISTINCT provider_type) FROM item_evidence WHERE item_id = i.id) AS evidence_providers,
+        (SELECT json_group_array(DISTINCT source_name) FROM item_evidence WHERE item_id = i.id) AS evidence_source_names
+      FROM items i
+      LEFT JOIN sources s ON s.id = i.source_id
+      LEFT JOIN ai_evaluations e ON e.item_id = i.id
+      WHERE i.archived_at IS NOT NULL
+      ORDER BY i.archived_at DESC, i.id DESC
+      LIMIT ?`).all(limit) as ItemJoinedRow[];
+      return rows.map(mapItem);
+    },
+    restore(id: number) {
+      return getDb().prepare("UPDATE items SET archived_at = NULL WHERE id = ?").run(id).changes > 0;
+    },
+    batchRestore(ids: number[]) {
+      if (ids.length === 0) return 0;
+      const placeholders = ids.map(() => '?').join(',');
+      return getDb().prepare("UPDATE items SET archived_at = NULL WHERE id IN (" + placeholders + ")").run(...ids).changes;
+    },
+    batchDelete(ids: number[]) {
+      if (ids.length === 0) return 0;
+      const placeholders = ids.map(() => '?').join(',');
+      return getDb().prepare("DELETE FROM items WHERE id IN (" + placeholders + ")").run(...ids).changes;
+    },
+    archiveOldReadItems() {
+      return getDb().prepare(`UPDATE items SET archived_at = CURRENT_TIMESTAMP WHERE read_at IS NOT NULL AND read_at < datetime('now', '-24 hours') AND archived_at IS NULL`).run().changes;
     },
     byId(id: number): HotspotItem | null {
       const row = getDb().prepare(`
@@ -556,11 +615,13 @@ export const repositories = {
           INSERT INTO items (
             source_id, keyword_id, title, url, normalized_url, summary,
             published_at, fetched_at, matched_keyword, status,
-            quality_score, quality_signals, evidence_count
+            quality_score, quality_signals, evidence_count,
+            interaction_likes, interaction_reposts, interaction_replies, interaction_views
           ) VALUES (
             @sourceId, @keywordId, @title, @url, @normalizedUrl, @summary,
             @publishedAt, @fetchedAt, @matchedKeyword, 'watch',
-            @qualityScore, @qualitySignalsJson, 1
+            @qualityScore, @qualitySignalsJson, 1,
+            @interactionLikes, @interactionReposts, @interactionReplies, @interactionViews
           )
         `).run({ ...input, qualitySignalsJson: JSON.stringify(input.qualitySignals) });
         const itemId = Number(info.lastInsertRowid);
@@ -639,6 +700,7 @@ interface KeywordRow {
   term: string;
   scope: string;
   enabled: number;
+  account_mode: number;
   created_at: string;
 }
 
@@ -683,6 +745,10 @@ interface ItemJoinedRow {
   quality_score: number;
   quality_signals: string;
   evidence_count: number;
+  interaction_likes: number;
+  interaction_reposts: number;
+  interaction_replies: number;
+  interaction_views: number;
   source_reliability: ReliabilityTier | null;
   source_community: number | null;
   relevance_score: number | null;
@@ -703,6 +769,7 @@ function mapKeyword(row: KeywordRow): Keyword {
     term: row.term,
     scope: row.scope,
     enabled: Boolean(row.enabled),
+    accountMode: Boolean(row.account_mode),
     createdAt: row.created_at
   };
 }
@@ -757,6 +824,10 @@ function mapItem(row: ItemJoinedRow): HotspotItem {
     evidenceSourceNames: parseJsonArray(row.evidence_source_names),
     sourceReliability: row.source_reliability ? parseReliabilityTier(row.source_reliability) : null,
     communitySource: Boolean(row.source_community),
+    interactionLikes: row.interaction_likes ?? 0,
+    interactionReposts: row.interaction_reposts ?? 0,
+    interactionReplies: row.interaction_replies ?? 0,
+    interactionViews: row.interaction_views ?? 0,
     evaluation: row.relevance_score === null ? null : {
       relevanceScore: row.relevance_score,
       credibilityScore: row.credibility_score ?? 0,
@@ -844,6 +915,24 @@ function mergeItemEvidence(db: Database.Database, itemId: number, input: RawItem
       END
     WHERE id = ?
   `).run(row.count, input.qualityScore, input.qualityScore, JSON.stringify(input.qualitySignals), itemId);
+}
+
+function detectAccountMode(term: string): boolean {
+  const accountPatterns = [
+    /公司$/,
+    /团队$/,
+    /工作室$/,
+    /官方$/,
+    /游戏$/,
+    /科技$/,
+    /平台$/,
+    /引擎$/,
+  ];
+  if (accountPatterns.some(p => p.test(term))) return true;
+  // 短中文关键词且无空格，可能是组织名
+  const chineseOnly = term.replace(/[^\u4e00-\u9fff]/g, "");
+  if (chineseOnly.length >= 2 && chineseOnly.length <= 3 && !term.includes(" ")) return true;
+  return false;
 }
 
 function hostname(url: string): string {

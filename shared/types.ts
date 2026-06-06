@@ -9,6 +9,7 @@ export interface Keyword {
   term: string;
   scope: string;
   enabled: boolean;
+  accountMode: boolean;
   createdAt: string;
 }
 
@@ -47,6 +48,10 @@ export interface HotspotItem {
   sourceReliability: ReliabilityTier | null;
   communitySource: boolean;
   evaluation: AiEvaluation | null;
+  interactionLikes: number;
+  interactionReposts: number;
+  interactionReplies: number;
+  interactionViews: number;
 }
 
 export interface AiEvaluation {

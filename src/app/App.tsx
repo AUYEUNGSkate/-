@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+﻿import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   BellDot,
   CheckCircle2,
@@ -39,6 +39,9 @@ export function App() {
   const [sourceCategory, setSourceCategory] = useState("自定义");
   const [scanInterval, setScanInterval] = useState("30");
   const [aiMode, setAiMode] = useState<AiMode>("openrouter");
+  const [showArchived, setShowArchived] = useState(false);
+  const [archivedItems, setArchivedItems] = useState<HotspotItem[]>([]);
+  const [selectedArchivedIds, setSelectedArchivedIds] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     void refresh();
@@ -51,7 +54,7 @@ export function App() {
   }, [dashboard]);
 
   const visibleItems = useMemo(() => (dashboard ? getVisibleItems(dashboard.items, keywordFilter) : []), [dashboard, keywordFilter]);
-  const unreadItems = useMemo(() => (dashboard ? dashboard.items.filter((item) => !item.readAt).slice(0, 4) : []), [dashboard]);
+  const unreadItems = useMemo(() => (dashboard ? dashboard.items.filter((item) => !item.readAt && item.status === "new").slice(0, 4) : []), [dashboard]);
 
   const selected = useMemo(() => {
     if (!dashboard) return null;
@@ -62,9 +65,16 @@ export function App() {
   const activeKeywords = dashboard?.keywords.filter((keyword) => keyword.enabled).length ?? 0;
   const activeSources = dashboard?.sources.filter((source) => source.enabled).length ?? 0;
 
-  function openHotspots(itemId?: number) {
+  async function openHotspots(itemId?: number) {
     setActiveView("hotspots");
-    if (itemId) setSelectedId(itemId);
+    if (itemId) {
+      setSelectedId(itemId);
+      const item = dashboard?.items.find(i => i.id === itemId);
+      if (item && !item.readAt) {
+        await api.markRead(item.id);
+        await refresh();
+      }
+    }
   }
 
   function changeKeywordFilter(next: number | "all") {
@@ -72,6 +82,57 @@ export function App() {
     if (!dashboard) return;
     const nextItems = getVisibleItems(dashboard.items, next);
     setSelectedId(nextItems[0]?.id ?? null);
+  }
+
+  async function loadArchived() {
+    try {
+      const items = await api.archived();
+      setArchivedItems(items);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "加载归档失败");
+    }
+  }
+
+  async function restoreItem(id: number) {
+    try {
+      await api.restore(id);
+      await loadArchived();
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "恢复失败");
+    }
+  }
+
+  async function batchRestore() {
+    const ids = Array.from(selectedArchivedIds);
+    if (ids.length === 0) return;
+    try {
+      await api.batchRestore(ids);
+      setSelectedArchivedIds(new Set());
+      await loadArchived();
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "批量恢复失败");
+    }
+  }
+
+  async function batchDelete() {
+    const ids = Array.from(selectedArchivedIds);
+    if (ids.length === 0) return;
+    try {
+      await api.batchDelete(ids);
+      setSelectedArchivedIds(new Set());
+      await loadArchived();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "批量删除失败");
+    }
+  }
+
+  function toggleArchivedSelection(id: number, selected: boolean) {
+    const next = new Set(selectedArchivedIds);
+    if (selected) next.add(id);
+    else next.delete(id);
+    setSelectedArchivedIds(next);
   }
 
   async function refresh() {
@@ -179,6 +240,15 @@ export function App() {
             selected={selected}
             onSelect={setSelectedId}
             onRead={markRead}
+            showArchived={showArchived}
+            archivedItems={archivedItems}
+            selectedArchivedIds={selectedArchivedIds}
+            onToggleArchived={toggleArchivedSelection}
+            onRestore={restoreItem}
+            onBatchRestore={batchRestore}
+            onBatchDelete={batchDelete}
+            onLoadArchived={loadArchived}
+            onShowArchived={setShowArchived}
           />
         ) : null}
 
@@ -366,7 +436,16 @@ function HotspotView({
   featured,
   selected,
   onSelect,
-  onRead
+  onRead,
+  showArchived,
+  archivedItems,
+  selectedArchivedIds,
+  onToggleArchived,
+  onRestore,
+  onBatchRestore,
+  onBatchDelete,
+  onLoadArchived,
+  onShowArchived
 }: {
   items: HotspotItem[];
   allItems: HotspotItem[];
@@ -377,6 +456,15 @@ function HotspotView({
   selected: HotspotItem | null;
   onSelect: (id: number) => void;
   onRead: (item: HotspotItem) => void;
+  showArchived: boolean;
+  archivedItems: HotspotItem[];
+  selectedArchivedIds: Set<number>;
+  onToggleArchived: (id: number, selected: boolean) => void;
+  onRestore: (id: number) => void;
+  onBatchRestore: () => void;
+  onBatchDelete: () => void;
+  onLoadArchived: () => void;
+  onShowArchived: (show: boolean) => void;
 }) {
   const activeKeywords = keywords.filter((keyword) => keyword.enabled);
   const keywordCounts = new Map<number, number>();
@@ -408,44 +496,78 @@ function HotspotView({
         </div>
       </section>
 
-      <section className="featured-strip">
-        {featured ? (
-          <>
-            <div className="featured-strip-main">
-              <strong>{featured.title}</strong>
-              <small>
-                {featured.matchedKeyword} · {formatDate(featured.publishedAt)}
-              </small>
-            </div>
-            <a className="inline-link compact-link" href={featured.url} target="_blank" rel="noreferrer">
-              打开
-              <ExternalLink className="size-4" />
-            </a>
-          </>
-        ) : (
-          <EmptyState title="还没有热点" body="添加关键词后点击扫描。" />
-        )}
-      </section>
 
       <section className="surface-panel list-panel compact-list-panel">
-        <SectionHeader icon={<Sparkles className="size-4" />} title="实时热点" />
-        <div className="signal-list">
-          {items.length === 0 ? (
-            <EmptyState title="暂无候选内容" body="这个关键词暂时没有新的有效资讯。" />
-          ) : (
-            items.map((item) => (
-              <button key={item.id} className={selected?.id === item.id ? "signal-item selected" : "signal-item"} onClick={() => onSelect(item.id)}>
-                <span className={item.status === "new" && !item.readAt ? "signal-bullet active" : "signal-bullet"} />
-                <span className="signal-copy">
-                  <strong>{item.title}</strong>
-                  <small>
-                    {item.matchedKeyword} · {formatDate(item.publishedAt)}
-                  </small>
-                </span>
-              </button>
-            ))
-          )}
+        <div className="section-header-with-action">
+          <SectionHeader icon={<Sparkles className="size-4" />} title={showArchived ? "归档热点" : "实时热点"} />
+          <button 
+            className={showArchived ? "toolbar-button active" : "toolbar-button"}
+            onClick={() => {
+              onShowArchived(!showArchived);
+              if (!showArchived) onLoadArchived();
+            }}
+          >
+            {showArchived ? "返回主列表" : "查看归档"}
+          </button>
         </div>
+        {showArchived ? (
+          <div className="archived-view">
+            <div className="archived-toolbar">
+              <button onClick={onBatchRestore} disabled={selectedArchivedIds.size === 0}>
+                批量恢复 ({selectedArchivedIds.size})
+              </button>
+              <button onClick={onBatchDelete} disabled={selectedArchivedIds.size === 0}>
+                批量删除 ({selectedArchivedIds.size})
+              </button>
+            </div>
+            <div className="archived-list">
+              {archivedItems.length === 0 ? (
+                <EmptyState title="暂无归档内容" body="已读信息会在24小时后自动归档。" />
+              ) : (
+                archivedItems.map((item) => (
+                  <div key={item.id} className="archived-item">
+                    <input
+                      type="checkbox"
+                      checked={selectedArchivedIds.has(item.id)}
+                      onChange={(e) => onToggleArchived(item.id, e.target.checked)}
+                    />
+                    <div className="archived-item-content">
+                      <strong>{item.title}</strong>
+                      <small>{item.matchedKeyword} · {formatDate(item.publishedAt)}</small>
+                    </div>
+                    <button onClick={() => onRestore(item.id)}>恢复</button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="signal-list">
+            {items.length === 0 ? (
+              <EmptyState title="暂无候选内容" body="这个关键词暂时没有新的有效资讯。" />
+            ) : (
+              items.map((item) => (
+                <button key={item.id} className={selected?.id === item.id ? "signal-item selected" : "signal-item"} onClick={() => {
+                  onSelect(item.id);
+                  if (!item.readAt) {
+                    onRead(item);
+                  }
+                }}>
+                  <span className={item.status === "new" && !item.readAt ? "signal-bullet active" : "signal-bullet"} />
+                  <span className="signal-copy">
+                    <strong>{item.title}</strong>
+                    <div className="signal-meta">
+                      <small>
+                        {item.matchedKeyword} · {formatDate(item.publishedAt)}
+                      </small>
+                      {formatInteraction(item)}
+                    </div>
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+        )}
       </section>
 
       <Inspector item={selected} onRead={onRead} />
@@ -712,4 +834,30 @@ function reliabilityLabel(value: string | null): string {
   if (value === "community") return "社区";
   if (value === "search") return "搜索";
   return "未知";
+}
+
+function formatInteraction(item: HotspotItem): string {
+  // 优先显示实际互动量
+  const parts: string[] = [];
+  if (item.interactionLikes > 0) parts.push(`${formatNumber(item.interactionLikes)}赞`);
+  if (item.interactionReposts > 0) parts.push(`${formatNumber(item.interactionReposts)}转发`);
+  if (item.interactionReplies > 0) parts.push(`${formatNumber(item.interactionReplies)}回复`);
+  if (item.interactionViews > 0) parts.push(`${formatNumber(item.interactionViews)}浏览`);
+  
+  // 如果有实际互动量，返回
+  if (parts.length > 0) return parts.join(" · ");
+  
+  // 无实际互动量
+  return "暂无互动数据";
+}
+
+// 格式化数字（大于10000显示为万）
+function formatNumber(num: number): string {
+  if (num >= 10000) {
+    return (num / 10000).toFixed(1).replace(/\.0$/, "") + "万";
+  }
+  if (num >= 1000) {
+    return (num / 1000).toFixed(1).replace(/\.0$/, "") + "k";
+  }
+  return String(num);
 }

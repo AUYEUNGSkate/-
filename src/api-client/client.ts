@@ -32,7 +32,11 @@ export const api = {
   deleteSource: (id: number) => request<{ ok: boolean }>(`/sources/${id}`, { method: "DELETE" }),
   markRead: (id: number) => request<{ ok: boolean; unreadCount: number }>(`/items/${id}/read`, { method: "PATCH" }),
   updateSettings: (patch: Partial<AppSettings>) =>
-    request<AppSettings>("/settings", { method: "PATCH", body: JSON.stringify(patch) })
+    request<AppSettings>("/settings", { method: "PATCH", body: JSON.stringify(patch) }),
+  archived: (limit = 100) => request<HotspotItem[]>(`/items/archived?limit=${limit}`),
+  restore: (id: number) => request<{ ok: boolean }>(`/items/${id}/restore`, { method: "POST" }),
+  batchRestore: (ids: number[]) => request<{ ok: number }>("/items/batch-restore", { method: "POST", body: JSON.stringify({ ids }) }),
+  batchDelete: (ids: number[]) => request<{ ok: number }>("/items/batch-delete", { method: "POST", body: JSON.stringify({ ids }) })
 };
 
 export function formatDate(value: string | null): string {

@@ -19,6 +19,10 @@ export interface CollectedItem {
   rank: number;
   qualityScore: number;
   qualitySignals: string[];
+  interactionLikes: number;
+  interactionReposts: number;
+  interactionReplies: number;
+  interactionViews: number;
 }
 
 const parser = new XMLParser({
@@ -52,6 +56,9 @@ export async function collectFromSource(keyword: Keyword, source: Source): Promi
 }
 
 export function buildFeedUrl(template: string, keyword: Keyword): string {
+  if (keyword.accountMode) {
+    return template.replaceAll("{query}", encodeURIComponent(keyword.term));
+  }
   const query = [keyword.term, keyword.scope].filter(Boolean).join(" ");
   return template.replaceAll("{query}", encodeURIComponent(query));
 }
@@ -134,8 +141,9 @@ function normalizeFeedItem(
   const url = source.providerType === "google_news" ? extractOriginalUrl(raw, feedUrl) : feedUrl;
   if (!title || !url) return null;
   const summary = cleanSummary(text(raw.description) || text(raw.summary) || text(raw.content) || "");
-  const quality = assessContentQuality({ title, url, summary });
+  const quality = assessContentQuality({ title, url, summary, sourceName: source.name, sourceCommunity: source.communitySource });
   if (quality.lowQuality) return null;
+  const counts = extractInteractionCounts(title);
   return {
     sourceId: source.id,
     keywordId: keyword.id,
@@ -150,7 +158,11 @@ function normalizeFeedItem(
     query: buildQuery(keyword),
     rank,
     qualityScore: quality.score,
-    qualitySignals: quality.signals
+    qualitySignals: quality.signals,
+    interactionLikes: counts.likes,
+    interactionReposts: counts.reposts,
+    interactionReplies: counts.replies,
+    interactionViews: counts.views
   };
 }
 
@@ -166,8 +178,9 @@ function normalizeSearchResult(
   const url = result.url ?? "";
   if (!title || !url) return null;
   const summary = cleanSummary(result.description ?? "");
-  const quality = assessContentQuality({ title, url, summary });
+  const quality = assessContentQuality({ title, url, summary, sourceName: source.name, sourceCommunity: source.communitySource });
   if (quality.lowQuality) return null;
+  const counts = extractInteractionCounts(title);
   return {
     sourceId: source.id,
     keywordId: keyword.id,
@@ -182,7 +195,11 @@ function normalizeSearchResult(
     query,
     rank,
     qualityScore: quality.score,
-    qualitySignals: quality.signals
+    qualitySignals: quality.signals,
+    interactionLikes: counts.likes,
+    interactionReposts: counts.reposts,
+    interactionReplies: counts.replies,
+    interactionViews: counts.views
   };
 }
 
@@ -232,6 +249,30 @@ function decodeHtml(value: string): string {
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, "\"")
     .replace(/&#39;/g, "'");
+}
+
+function extractInteractionCounts(title: string): { likes: number; reposts: number; replies: number; views: number } {
+  const patterns = {
+    likes: /(\d+(?:\.\d+)?[kK万]?)\s*(?:赞|点赞|like|upvote|赞同)/i,
+    reposts: /(\d+(?:\.\d+)?[kK万]?)\s*(?:转发|repost|share)/i,
+    replies: /(\d+(?:\.\d+)?[kK万]?)\s*(?:回复|评论|comment|reply|回答|条评价|个回答)/i,
+    views: /(\d+(?:\.\d+)?[kK万]?)\s*(?:播放|浏览|view|阅读)/i,
+  };
+  const result = { likes: 0, reposts: 0, replies: 0, views: 0 };
+  for (const [key, pattern] of Object.entries(patterns)) {
+    const match = title.match(pattern);
+    if (match) {
+      result[key as keyof typeof result] = parseNumber(match[1]);
+    }
+  }
+  return result;
+}
+
+function parseNumber(str: string): number {
+  const num = parseFloat(str);
+  if (str.toLowerCase().includes("k")) return num * 1000;
+  if (str.includes("万")) return num * 10000;
+  return num;
 }
 
 function arrayify(value: unknown): Record<string, unknown>[] {
