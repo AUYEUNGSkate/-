@@ -25,6 +25,8 @@ export function App() {
   const [dashboard, setDashboard] = useState<DashboardPayload | null>(null);
   const [activeView, setActiveView] = useState<ViewKey>("hotspots");
   const [keywordFilter, setKeywordFilter] = useState<number | "all">("all");
+  const [sortBy, setSortBy] = useState<"priority" | "newest" | "interaction" | "unread">("priority");
+  const [readFilter, setReadFilter] = useState<"all" | "unread" | "read">("all");
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
   const [error, setError] = useState("");
@@ -49,7 +51,19 @@ export function App() {
     setAiMode(dashboard.settings.aiMode);
   }, [dashboard]);
 
-  const visibleItems = useMemo(() => (dashboard ? getVisibleItems(dashboard.items, keywordFilter) : []), [dashboard, keywordFilter]);
+  const visibleItems = useMemo(() => {
+    if (!dashboard) return [];
+    let result = getVisibleItems(dashboard.items, keywordFilter);
+    // Read filter
+    if (readFilter === "unread") result = result.filter((item) => !item.readAt);
+    else if (readFilter === "read") result = result.filter((item) => Boolean(item.readAt));
+    // Sort
+    if (sortBy === "newest") result = [...result].sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
+    else if (sortBy === "interaction") result = [...result].sort((a, b) => (b.interactionViews + b.interactionLikes) - (a.interactionViews + a.interactionLikes));
+    else if (sortBy === "unread") result = [...result].sort((a, b) => (a.readAt ? 1 : 0) - (b.readAt ? 1 : 0) || new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
+    else result = [...result].sort((a, b) => b.priorityScore - a.priorityScore);
+    return result;
+  }, [dashboard, keywordFilter, sortBy, readFilter]);
   const unreadItems = useMemo(() => getUnreadItems(dashboard?.items ?? []), [dashboard]);
   const unreadCount = unreadItems.length;
   const todayAdded = useMemo(() => getTodayAddedCount(dashboard?.items ?? []), [dashboard]);
@@ -232,6 +246,10 @@ export function App() {
             keywordFilter={keywordFilter}
             onKeywordFilter={changeKeywordFilter}
             onOpenOriginal={openOriginal}
+            sortBy={sortBy}
+            readFilter={readFilter}
+            onSortBy={setSortBy}
+            onReadFilter={setReadFilter}
             showArchived={showArchived}
             archivedItems={archivedItems}
             selectedArchivedIds={selectedArchivedIds}
@@ -404,6 +422,10 @@ function HotspotView({
   keywordFilter,
   onKeywordFilter,
   onOpenOriginal,
+  sortBy,
+  readFilter,
+  onSortBy,
+  onReadFilter,
   showArchived,
   archivedItems,
   selectedArchivedIds,
@@ -420,6 +442,10 @@ function HotspotView({
   keywordFilter: number | "all";
   onKeywordFilter: (id: number | "all") => void;
   onOpenOriginal: (item: HotspotItem) => void;
+  sortBy: "priority" | "newest" | "interaction" | "unread";
+  readFilter: "all" | "unread" | "read";
+  onSortBy: (value: "priority" | "newest" | "interaction" | "unread") => void;
+  onReadFilter: (value: "all" | "unread" | "read") => void;
   showArchived: boolean;
   archivedItems: HotspotItem[];
   selectedArchivedIds: Set<number>;
@@ -459,6 +485,25 @@ function HotspotView({
           ))}
         </div>
       </section>
+
+      <div className="sort-filter-bar">
+        <div className="sort-group">
+          <span className="sort-label">排序</span>
+          {(["priority","newest","interaction","unread"] as const).map((mode) => (
+            <button key={mode} className={sortBy === mode ? "sort-chip active" : "sort-chip"} onClick={() => onSortBy(mode)}>
+              {{priority:"优先",newest:"最新",interaction:"最热互动",unread:"仅未读"}[mode]}
+            </button>
+          ))}
+        </div>
+        <div className="sort-group">
+          <span className="sort-label">筛选</span>
+          {(["all","unread","read"] as const).map((mode) => (
+            <button key={mode} className={readFilter === mode ? "sort-chip active" : "sort-chip"} onClick={() => onReadFilter(mode)}>
+              {{all:"全部",unread:"未读",read:"已读"}[mode]}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <section className="feed-panel">
         <div className="feed-head">

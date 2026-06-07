@@ -397,6 +397,49 @@ button:disabled {
   padding: 10px;
 }
 
+.sort-filter-bar {
+  display: flex;
+  gap: 16px;
+  padding: 0 0 8px 0;
+  flex-wrap: wrap;
+}
+
+.sort-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sort-label {
+  font-size: 11px;
+  color: var(--radar-muted);
+  margin-right: 4px;
+  white-space: nowrap;
+}
+
+.sort-chip {
+  padding: 5px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--radar-line);
+  background: var(--radar-panel-ghost);
+  font-size: 12px;
+  color: var(--radar-text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.sort-chip:hover {
+  border-color: var(--radar-line-strong);
+  background: var(--radar-panel);
+}
+
+.sort-chip.active {
+  border-color: var(--radar-accent);
+  background: rgba(37, 99, 235, 0.12);
+  color: var(--radar-accent);
+}
+
 .track-chip-row {
   display: flex;
   gap: 8px;
