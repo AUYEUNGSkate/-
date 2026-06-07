@@ -366,7 +366,7 @@ export function getDefaultSources(): SourcePreset[] {
       reliabilityTier: "trusted",
       communitySource: false,
       minQualityScore: 62,
-      enabled: true,
+      enabled: false,
       builtin: true
     },
     {
