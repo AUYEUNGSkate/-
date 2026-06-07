@@ -399,45 +399,96 @@ button:disabled {
 
 .sort-filter-bar {
   display: flex;
-  gap: 16px;
-  padding: 0 0 8px 0;
+  gap: 8px;
+  padding: 0 0 10px 0;
   flex-wrap: wrap;
 }
 
-.sort-group {
+.filter-dropdown {
+  position: relative;
+}
+
+.filter-dropdown-trigger {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-}
-
-.sort-label {
-  font-size: 11px;
-  color: var(--radar-muted);
-  margin-right: 4px;
-  white-space: nowrap;
-}
-
-.sort-chip {
-  padding: 5px 10px;
+  padding: 6px 10px;
   border-radius: 7px;
   border: 1px solid var(--radar-line);
-  background: var(--radar-panel-ghost);
+  background: var(--radar-panel);
+  color: var(--radar-text);
   font-size: 12px;
-  color: var(--radar-text-secondary);
   cursor: pointer;
   transition: all 0.2s;
   white-space: nowrap;
 }
 
-.sort-chip:hover {
+.filter-dropdown-trigger:hover {
   border-color: var(--radar-line-strong);
-  background: var(--radar-panel);
 }
 
-.sort-chip.active {
-  border-color: var(--radar-accent);
-  background: rgba(37, 99, 235, 0.12);
+.filter-dropdown-label {
+  color: var(--radar-muted);
+  font-size: 10px;
+}
+
+.filter-dropdown-value {
+  font-weight: 600;
+}
+
+.filter-chevron {
+  opacity: 0.5;
+  transition: transform 0.2s;
+}
+
+.filter-chevron.open {
+  transform: rotate(180deg);
+}
+
+.filter-dropdown-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9;
+}
+
+.filter-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 10;
+  min-width: 120px;
+  padding: 4px;
+  border-radius: 8px;
+  border: 1px solid var(--radar-line-strong);
+  background: var(--radar-panel-strong);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.filter-dropdown-item {
+  padding: 6px 10px;
+  border-radius: 5px;
+  border: none;
+  background: transparent;
+  color: var(--radar-text-secondary);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.filter-dropdown-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--radar-text);
+}
+
+.filter-dropdown-item.active {
+  background: rgba(37, 99, 235, 0.15);
   color: var(--radar-accent);
+  font-weight: 600;
 }
 
 .track-chip-row {

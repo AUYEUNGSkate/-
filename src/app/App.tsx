@@ -2,6 +2,7 @@
 import {
   BellDot,
   CheckCircle2,
+  ChevronDown,
   CircleOff,
   Eye,
   Gauge,
@@ -507,41 +508,47 @@ function HotspotView({
       </section>
 
       <div className="sort-filter-bar">
-        <div className="sort-group">
-          <span className="sort-label">排序</span>
-          {(["priority","newest","interaction","unread"] as const).map((mode) => (
-            <button key={mode} className={sortBy === mode ? "sort-chip active" : "sort-chip"} onClick={() => onSortBy(mode)}>
-              {{priority:"优先",newest:"最新",interaction:"最热互动",unread:"仅未读"}[mode]}
-            </button>
-          ))}
-        </div>
-        <div className="sort-group">
-          <span className="sort-label">已读</span>
-          {(["all","unread","read"] as const).map((mode) => (
-            <button key={mode} className={readFilter === mode ? "sort-chip active" : "sort-chip"} onClick={() => onReadFilter(mode)}>
-              {{all:"全部",unread:"未读",read:"已读"}[mode]}
-            </button>
-          ))}
-        </div>
-        <div className="sort-group">
-          <span className="sort-label">重要</span>
-          {(["all","hot","watch","low"] as const).map((mode) => (
-            <button key={mode} className={priorityFilter === mode ? "sort-chip active" : "sort-chip"} onClick={() => onPriorityFilter(mode)}>
-              {{all:"全部",hot:"热门",watch:"关注",low:"低质"}[mode]}
-            </button>
-          ))}
-        </div>
-        <div className="sort-group">
-          <span className="sort-label">来源</span>
-          <button className={sourceFilter === "all" ? "sort-chip active" : "sort-chip"} onClick={() => onSourceFilter("all")}>
-            全部
-          </button>
-          {Array.from(new Set(allItems.map(getItemSourceLabel))).sort().map((name) => (
-            <button key={name} className={sourceFilter === name ? "sort-chip active" : "sort-chip"} onClick={() => onSourceFilter(name)}>
-              {name}
-            </button>
-          ))}
-        </div>
+        <FilterDropdown
+          label="排序"
+          value={sortBy}
+          options={[
+            { key: "priority", label: "优先" },
+            { key: "newest", label: "最新" },
+            { key: "interaction", label: "最热互动" },
+            { key: "unread", label: "仅未读" }
+          ]}
+          onChange={(v) => onSortBy(v as typeof sortBy)}
+        />
+        <FilterDropdown
+          label="已读"
+          value={readFilter}
+          options={[
+            { key: "all", label: "全部" },
+            { key: "unread", label: "未读" },
+            { key: "read", label: "已读" }
+          ]}
+          onChange={(v) => onReadFilter(v as typeof readFilter)}
+        />
+        <FilterDropdown
+          label="重要"
+          value={priorityFilter}
+          options={[
+            { key: "all", label: "全部" },
+            { key: "hot", label: "热门 ≥75" },
+            { key: "watch", label: "关注 50-74" },
+            { key: "low", label: "低质 <50" }
+          ]}
+          onChange={(v) => onPriorityFilter(v as typeof priorityFilter)}
+        />
+        <FilterDropdown
+          label="来源"
+          value={sourceFilter}
+          options={[
+            { key: "all", label: "全部" },
+            ...Array.from(new Set(allItems.map(getItemSourceLabel))).sort().map((name) => ({ key: name, label: name }))
+          ]}
+          onChange={(v) => onSourceFilter(v)}
+        />
       </div>
 
       <section className="feed-panel">
@@ -875,6 +882,36 @@ function reliabilityLabel(value: string | null): string {
   if (value === "community") return "社区";
   if (value === "search") return "搜索";
   return "未知";
+}
+
+function FilterDropdown({ label, value, options, onChange }: { label: string; value: string; options: Array<{ key: string; label: string }>; onChange: (key: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const selected = options.find((o) => o.key === value);
+  return (
+    <div className="filter-dropdown">
+      <button className="filter-dropdown-trigger" onClick={() => setOpen(!open)}>
+        <span className="filter-dropdown-label">{label}</span>
+        <span className="filter-dropdown-value">{selected?.label ?? value}</span>
+        <ChevronDown className={`size-3 filter-chevron ${open ? "open" : ""}`} />
+      </button>
+      {open ? (
+        <>
+          <div className="filter-dropdown-overlay" onClick={() => setOpen(false)} />
+          <div className="filter-dropdown-menu">
+            {options.map((opt) => (
+              <button
+                key={opt.key}
+                className={value === opt.key ? "filter-dropdown-item active" : "filter-dropdown-item"}
+                onClick={() => { onChange(opt.key); setOpen(false); }}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
 }
 
 function formatInteraction(item: HotspotItem): string {
