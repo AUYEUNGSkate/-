@@ -64,7 +64,12 @@ export async function collectFromSource(keyword: Keyword, source: Source): Promi
   }
   const feedUrl = buildFeedUrl(source.url, keyword);
   const xml = await fetchText(feedUrl);
-  return Promise.all(parseFeed(xml, source, keyword).map(enrichCollectedItem));
+  let items = parseFeed(xml, source, keyword);
+  // 对不含 {query} 的全站 RSS 源，按关键词做标题相关性过滤
+  if (!source.url.includes("{query}") && !keyword.accountMode) {
+    items = items.filter((item) => item.title.includes(keyword.term) || (keyword.scope && keyword.scope.split(/[,，、\s]+/).some((w) => item.title.includes(w))));
+  }
+  return Promise.all(items.map(enrichCollectedItem));
 }
 
 export function buildFeedUrl(template: string, keyword: Keyword): string {

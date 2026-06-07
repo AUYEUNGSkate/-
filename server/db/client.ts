@@ -208,7 +208,7 @@ export function getDefaultSources(): SourcePreset[] {
   return [
     {
       name: "RSSHub 百度搜索",
-      url: "https://rsshub.app/baidu/search/{query}",
+      url: "https://rsshub.rssforever.com/baidu/search/{query}",
       category: "国内综合",
       providerType: "rss",
       reliabilityTier: "search",
