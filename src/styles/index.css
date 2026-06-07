@@ -445,6 +445,27 @@ button:disabled {
   transform: rotate(180deg);
 }
 
+.source-search-input {
+  width: 120px;
+  padding: 6px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--radar-line);
+  background: var(--radar-panel);
+  color: var(--radar-text);
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.source-search-input::placeholder {
+  color: var(--radar-muted);
+  font-size: 11px;
+}
+
+.source-search-input:focus {
+  border-color: var(--radar-accent);
+}
+
 .filter-dropdown-overlay {
   position: fixed;
   inset: 0;
