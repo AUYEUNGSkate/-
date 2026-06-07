@@ -1,7 +1,7 @@
 export type AiMode = "openrouter" | "mock";
 
 export type RecommendedAction = "notify" | "watch" | "ignore";
-export type ProviderType = "rss" | "google_news" | "brave_search";
+export type ProviderType = "rss" | "google_news" | "brave_search" | "bilibili_search";
 export type ReliabilityTier = "official" | "trusted" | "community" | "search";
 export type SummarySource = "ai" | "rss" | "metadata" | "title";
 export type InteractionSource = "bilibili" | "zhihu" | "wechat" | "html" | "rss" | "none";

@@ -426,7 +426,6 @@ function ensureDefaultSources(db: Database.Database) {
       reliability_tier = @reliabilityTier,
       community_source = @communitySource,
       min_quality_score = @minQualityScore,
-      enabled = @enabled,
       builtin = 1
     WHERE id = @id
   `);
@@ -1001,7 +1000,8 @@ function inferProviderType(url: string): ProviderType {
 }
 
 function parseProviderType(value: string): ProviderType {
-  return value === "google_news" || value === "brave_search" ? value : "rss";
+  if (value === "google_news" || value === "brave_search" || value === "bilibili_search") return value;
+  return "rss";
 }
 
 function parseReliabilityTier(value: string): ReliabilityTier {

@@ -48,12 +48,12 @@ v1 信息源收敛为“国内无 Key 来源优先 + 直连优先”。主要从
 | 源名称 | RSS URL | 分类 | 说明 |
 |--------|---------|------|------|
 | 机核网 | `https://www.gcores.com/rss` | 国内媒体 | 原生 RSS，游戏文化/新闻 |
-| 百度搜索 | `https://rsshub.app/baidu/search/{query}` | 国内综合 | RSSHub 桥接，关键词搜索 |
-| 游民星空 | `https://rsshub.app/gamersky/news` | 国内媒体 | RSSHub 桥接，游戏资讯 |
-| 3DM 游戏 | `https://rsshub.app/3dm/news` | 国内媒体 | RSSHub 桥接，游戏新闻 |
-| 搜狐游戏 | `https://rsshub.app/sohu/game` | 国内综合 | RSSHub 桥接，综合游戏频道 |
-| 网易游戏 | `https://rsshub.app/163/dy` | 国内综合 | RSSHub 桥接，网易游戏频道 |
-| 17173 新闻 | `https://rsshub.app/17173/news` | 国内媒体 | RSSHub 桥接，游戏资讯 |
+| 百度搜索 | `https://rsshub.rssforever.com/baidu/search/{query}` | 国内综合 | RSSHub 桥接，关键词搜索 |
+| 游民星空 | `https://rsshub.rssforever.com/gamersky/news` | 国内媒体 | RSSHub 桥接，游戏资讯 |
+| 3DM 游戏 | `https://rsshub.rssforever.com/3dm/news` | 国内媒体 | RSSHub 桥接，游戏新闻 |
+| 搜狐游戏 | `https://rsshub.rssforever.com/sohu/game` | 国内综合 | RSSHub 桥接，综合游戏频道 |
+| 网易游戏 | `https://rsshub.rssforever.com/163/dy` | 国内综合 | RSSHub 桥接，网易游戏频道 |
+| 17173 新闻 | `https://rsshub.rssforever.com/17173/news` | 国内媒体 | RSSHub 桥接，游戏资讯 |
 
 ### 账号/官方/博主源
 
@@ -61,19 +61,19 @@ v1 信息源收敛为“国内无 Key 来源优先 + 直连优先”。主要从
 
 | 平台 | 识别方式 | 源 |
 |------|----------|----|
-| B站 | `space.bilibili.com/<uid>` 或 `uid:<uid>` | `https://rsshub.app/bilibili/user/video/{accountUid}` |
-| B站 | 同上 | `https://rsshub.app/bilibili/user/dynamic/{accountUid}` |
+| B站 | `space.bilibili.com/<uid>` 或 `uid:<uid>` | `https://rsshub.rssforever.com/bilibili/user/video/{accountUid}` |
+| B站 | 同上 | `https://rsshub.rssforever.com/bilibili/user/dynamic/{accountUid}` |
 
 不能唯一识别账号时，只标记 `account_mode`，仍走普通国内搜索，不自动冒认官方号。
 
-> RSSHub (`rsshub.app`) 是国内开源项目，免费提供各站点 RSS 桥接，无需注册或 API Key。
+> RSSHub (`rsshub.rssforever.com`) 是国内开源项目，免费提供各站点 RSS 桥接，无需注册或 API Key。
 
 ## RSSHub / Google News 查询
 
 默认优先使用 RSSHub 百度搜索：
 
 ```txt
-https://rsshub.app/baidu/search/<encoded query>
+https://rsshub.rssforever.com/baidu/search/<encoded query>
 ```
 
 Google News RSS 仅作为可选补充，默认禁用：

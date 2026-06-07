@@ -56,6 +56,9 @@ export async function collectFromSource(keyword: Keyword, source: Source): Promi
   if (source.providerType === "brave_search") {
     return collectFromBraveSearch(keyword, source);
   }
+  if (source.providerType === "bilibili_search") {
+    return collectFromBilibiliSearch(keyword, source);
+  }
   const feedUrl = buildFeedUrl(source.url, keyword);
   const xml = await fetchText(feedUrl);
   return Promise.all(parseFeed(xml, source, keyword).map(enrichCollectedItem));
@@ -110,6 +113,69 @@ export async function collectFromBraveSearch(keyword: Keyword, source: Source): 
     .map((result, index) => normalizeSearchResult(result, source, keyword, query, fetchedAt, index + 1))
     .filter((item): item is CollectedItem => Boolean(item));
   return Promise.all(items.map(enrichCollectedItem));
+}
+
+export async function collectFromBilibiliSearch(keyword: Keyword, source: Source): Promise<CollectedItem[]> {
+  const query = buildQuery(keyword);
+  const url = new URL("https://api.bilibili.com/x/web-interface/search/type");
+  url.searchParams.set("search_type", "video");
+  url.searchParams.set("keyword", query);
+  url.searchParams.set("page", "1");
+
+  const response = await fetch(url, {
+    headers: {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      "Referer": "https://search.bilibili.com",
+      "Accept": "application/json, text/plain, */*",
+      "Accept-Language": "zh-CN,zh;q=0.9",
+      "Cookie": "buvid3=auto"
+    }
+  });
+  if (!response.ok) throw new Error(`Bilibili Search HTTP ${response.status}`);
+  const text = await response.text();
+  let payload: BilibiliSearchResponse;
+  try {
+    payload = JSON.parse(text) as BilibiliSearchResponse;
+  } catch {
+    // B站 returned HTML (rate-limited), skip
+    return [];
+  }
+  const fetchedAt = new Date().toISOString();
+  const rawItems = (payload.data?.result ?? [])
+    .filter((v): v is NonNullable<typeof v> => Boolean(v.bvid && v.title));
+
+  const results: CollectedItem[] = [];
+  for (let index = 0; index < rawItems.length; index++) {
+    const video = rawItems[index];
+    const videoUrl = video.arcurl || `https://www.bilibili.com/video/${video.bvid}`;
+    const quality = assessContentQuality({ title: video.title!, url: videoUrl, summary: video.description ?? "" });
+    if (quality.lowQuality) continue;
+    const counts = extractInteractionCounts(video.title!);
+    results.push({
+      sourceId: source.id,
+      keywordId: keyword.id,
+      providerType: "bilibili_search" as ProviderType,
+      title: cleanArticleTitle(video.title!.replace(/<[^>]*>/g, "").trim()),
+      url: videoUrl,
+      normalizedUrl: normalizeUrl(videoUrl),
+      summary: cleanSummary(video.description ?? ""),
+      publishedAt: new Date((video.pubdate ?? 0) * 1000).toISOString(),
+      fetchedAt,
+      matchedKeyword: keyword.term,
+      query: buildQuery(keyword),
+      rank: index + 1,
+      qualityScore: quality.score,
+      qualitySignals: quality.signals,
+      interactionLikes: counts.likes,
+      interactionReposts: counts.reposts,
+      interactionReplies: counts.replies,
+      interactionViews: video.play ?? 0,
+      interactionSource: (video.play ? "bilibili" : "none") as CollectedItem["interactionSource"],
+      summarySource: (video.description ? "rss" : "title") as CollectedItem["summarySource"],
+    });
+  }
+
+  return Promise.all(results.map(enrichCollectedItem));
 }
 
 async function fetchText(url: string): Promise<string> {
@@ -283,4 +349,19 @@ interface BraveSearchResult {
   url?: string;
   description?: string;
   age?: string;
+}
+
+interface BilibiliSearchResponse {
+  data?: {
+    result?: Array<{
+      bvid?: string;
+      title?: string;
+      play?: number;
+      video_review?: number;
+      description?: string;
+      pubdate?: number;
+      arcurl?: string;
+      author?: string;
+    }>;
+  };
 }
