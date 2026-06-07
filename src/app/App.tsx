@@ -28,7 +28,7 @@ export function App() {
   const [keywordFilter, setKeywordFilter] = useState<number | "all">("all");
   const [sortBy, setSortBy] = useState<"priority" | "newest" | "interaction" | "unread">("priority");
   const [readFilter, setReadFilter] = useState<"all" | "unread" | "read">("all");
-  const [sourceFilter, setSourceFilter] = useState<string>("all");
+  const [sourceFilter, setSourceFilter] = useState<string[]>([]);
   const [priorityFilter, setPriorityFilter] = useState<"all" | "hot" | "watch" | "low">("all");
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
@@ -60,8 +60,8 @@ export function App() {
     // Read filter
     if (readFilter === "unread") result = result.filter((item) => !item.readAt);
     else if (readFilter === "read") result = result.filter((item) => Boolean(item.readAt));
-    // Source filter
-    if (sourceFilter !== "all") result = result.filter((item) => getItemSourceLabel(item) === sourceFilter);
+    // Source filter (multi-select, empty = all)
+    if (sourceFilter.length > 0) result = result.filter((item) => sourceFilter.includes(getItemSourceLabel(item)));
     // Priority filter
     if (priorityFilter === "hot") result = result.filter((item) => item.priorityScore >= 75);
     else if (priorityFilter === "watch") result = result.filter((item) => item.priorityScore >= 50 && item.priorityScore < 75);
@@ -262,7 +262,7 @@ export function App() {
             onReadFilter={setReadFilter}
             sourceFilter={sourceFilter}
             priorityFilter={priorityFilter}
-            onSourceFilter={setSourceFilter}
+            onSourceFilter={(sources) => setSourceFilter(sources)}
             onPriorityFilter={setPriorityFilter}
             showArchived={showArchived}
             archivedItems={archivedItems}
@@ -466,9 +466,9 @@ function HotspotView({
   readFilter: "all" | "unread" | "read";
   onSortBy: (value: "priority" | "newest" | "interaction" | "unread") => void;
   onReadFilter: (value: "all" | "unread" | "read") => void;
-  sourceFilter: string;
+  sourceFilter: string[];
   priorityFilter: "all" | "hot" | "watch" | "low";
-  onSourceFilter: (value: string) => void;
+  onSourceFilter: (sources: string[]) => void;
   onPriorityFilter: (value: "all" | "hot" | "watch" | "low") => void;
   showArchived: boolean;
   archivedItems: HotspotItem[];
@@ -543,14 +543,11 @@ function HotspotView({
           ]}
           onChange={(v) => onPriorityFilter(v as typeof priorityFilter)}
         />
-        <FilterDropdown
+        <MultiFilterDropdown
           label="来源"
-          value={sourceFilter}
-          options={[
-            { key: "all", label: "全部" },
-            ...sources.filter((s) => s.enabled).map((s) => ({ key: s.name, label: s.name }))
-          ]}
-          onChange={(v) => onSourceFilter(v)}
+          selected={sourceFilter}
+          options={sources.filter((s) => s.enabled).map((s) => s.name)}
+          onChange={onSourceFilter}
         />
       </div>
 
@@ -885,6 +882,42 @@ function reliabilityLabel(value: string | null): string {
   if (value === "community") return "社区";
   if (value === "search") return "搜索";
   return "未知";
+}
+
+function MultiFilterDropdown({ label, selected, options, onChange }: { label: string; selected: string[]; options: string[]; onChange: (selected: string[]) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="filter-dropdown">
+      <button className="filter-dropdown-trigger" onClick={() => setOpen(!open)}>
+        <span className="filter-dropdown-label">{label}</span>
+        <span className="filter-dropdown-value">{selected.length > 0 ? `已选 ${selected.length}` : "全部"}</span>
+        <ChevronDown className={`size-3 filter-chevron ${open ? "open" : ""}`} />
+      </button>
+      {open ? (
+        <>
+          <div className="filter-dropdown-overlay" onClick={() => setOpen(false)} />
+          <div className="filter-dropdown-menu">
+            {options.map((opt) => {
+              const checked = selected.includes(opt);
+              return (
+                <button
+                  key={opt}
+                  className={`filter-dropdown-item ${checked ? "active" : ""}`}
+                  onClick={() => {
+                    if (checked) onChange(selected.filter((s) => s !== opt));
+                    else onChange([...selected, opt]);
+                  }}
+                >
+                  <span className={checked ? "multi-check checked" : "multi-check"} />
+                  {opt}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
 }
 
 function FilterDropdown({ label, value, options, onChange }: { label: string; value: string; options: Array<{ key: string; label: string }>; onChange: (key: string) => void }) {

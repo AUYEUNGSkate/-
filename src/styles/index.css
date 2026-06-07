@@ -478,6 +478,9 @@ button:disabled {
   cursor: pointer;
   transition: all 0.15s;
   white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .filter-dropdown-item:hover {
@@ -489,6 +492,21 @@ button:disabled {
   background: rgba(37, 99, 235, 0.15);
   color: var(--radar-accent);
   font-weight: 600;
+}
+
+.multi-check {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1.5px solid var(--radar-line-strong);
+  display: inline-block;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+
+.multi-check.checked {
+  background: var(--radar-accent);
+  border-color: var(--radar-accent);
 }
 
 .track-chip-row {
