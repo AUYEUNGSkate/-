@@ -142,7 +142,7 @@ export async function collectFromBilibiliSearch(keyword: Keyword, source: Source
   }
   const fetchedAt = new Date().toISOString();
   const rawItems = (payload.data?.result ?? [])
-    .filter((v): v is NonNullable<typeof v> => Boolean(v.bvid && v.title));
+    .filter((v): v is NonNullable<typeof v> => Boolean(v.bvid && v.title && (v.play ?? 0) >= 1000));
 
   const results: CollectedItem[] = [];
   for (let index = 0; index < rawItems.length; index++) {
