@@ -167,6 +167,8 @@ function initializeSchema(db: Database.Database) {
   addColumnIfMissing(db, "items", "interaction_views", "INTEGER NOT NULL DEFAULT 0");
   addColumnIfMissing(db, "items", "summary_source", "TEXT NOT NULL DEFAULT 'rss'");
   addColumnIfMissing(db, "items", "interaction_source", "TEXT NOT NULL DEFAULT 'none'");
+  addColumnIfMissing(db, "items", "priority_score", "INTEGER NOT NULL DEFAULT 0");
+  addColumnIfMissing(db, "items", "freshness_score", "INTEGER NOT NULL DEFAULT 0");
   addColumnIfMissing(db, "keywords", "account_mode", "INTEGER NOT NULL DEFAULT 0");
   addColumnIfMissing(db, "keywords", "account_platform", "TEXT NOT NULL DEFAULT ''");
   addColumnIfMissing(db, "keywords", "account_uid", "TEXT NOT NULL DEFAULT ''");
@@ -633,6 +635,8 @@ export const repositories = {
           i.interaction_reposts,
           i.interaction_replies,
           i.interaction_views,
+          i.priority_score,
+          i.freshness_score,
           s.reliability_tier AS source_reliability,
           s.community_source AS source_community,
           e.relevance_score,
@@ -658,7 +662,7 @@ export const repositories = {
         LEFT JOIN ai_evaluations e ON e.item_id = i.id
         WHERE i.archived_at IS NULL
           AND datetime(i.published_at) >= datetime('now', '-24 hours')
-        ORDER BY i.read_at IS NOT NULL, i.published_at DESC, i.id DESC
+        ORDER BY i.priority_score DESC, i.published_at DESC, i.id DESC
         LIMIT ?
       `).all(limit) as ItemJoinedRow[];
       return rows
@@ -919,6 +923,8 @@ interface ItemJoinedRow {
   interaction_views: number;
   summary_source: string;
   interaction_source: string;
+  priority_score: number;
+  freshness_score: number;
   source_reliability: ReliabilityTier | null;
   source_community: number | null;
   relevance_score: number | null;
@@ -1003,6 +1009,8 @@ function mapItem(row: ItemJoinedRow): HotspotItem {
     interactionViews: row.interaction_views ?? 0,
     summarySource: parseSummarySource(row.summary_source),
     interactionSource: parseInteractionSource(row.interaction_source),
+    priorityScore: row.priority_score ?? 0,
+    freshnessScore: row.freshness_score ?? 0,
     evaluation: row.relevance_score === null ? null : {
       relevanceScore: row.relevance_score,
       credibilityScore: row.credibility_score ?? 0,

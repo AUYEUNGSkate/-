@@ -35,6 +35,46 @@ const RESPONSE_FORMAT = {
   }
 };
 
+export function computeFreshnessScore(publishedAt: string): number {
+  const ageMs = Date.now() - new Date(publishedAt).getTime();
+  if (Number.isNaN(ageMs)) return 50;
+  const hours = ageMs / (60 * 60 * 1000);
+  if (hours < 6) return 100;
+  if (hours < 12) return 85;
+  if (hours < 24) return 65;
+  if (hours < 48) return 35;
+  return 0;
+}
+
+export function computeInteractionScore(item: Pick<HotspotItem, "interactionViews" | "interactionLikes">): number {
+  const views = item.interactionViews ?? 0;
+  const likes = item.interactionLikes ?? 0;
+  if (views === 0 && likes === 0) return 50;
+  const viewScore = views > 0 ? Math.min(100, Math.log10(views + 1) * 18) : 0;
+  const likeScore = likes > 0 ? Math.min(100, Math.log10(likes + 1) * 12) : 0;
+  return Math.round(Math.max(viewScore, likeScore));
+}
+
+export function computeSourceScore(item: Pick<HotspotItem, "sourceReliability" | "evidenceCount">): number {
+  if (item.sourceReliability === "official") return 100;
+  if (item.sourceReliability === "trusted") return 80;
+  if (item.sourceReliability === "search") return 60;
+  return 40;
+}
+
+export function computeEvidenceScore(evidenceCount: number): number {
+  return Math.min(100, evidenceCount * 25);
+}
+
+export function computePriorityScore(item: Pick<HotspotItem, "qualityScore" | "publishedAt" | "interactionViews" | "interactionLikes" | "sourceReliability" | "evidenceCount">): number {
+  const freshness = computeFreshnessScore(item.publishedAt);
+  const interaction = computeInteractionScore(item);
+  const source = computeSourceScore(item);
+  const evidence = computeEvidenceScore(item.evidenceCount);
+  const score = item.qualityScore * 0.25 + freshness * 0.25 + interaction * 0.25 + source * 0.15 + evidence * 0.10;
+  return Math.round(Math.max(0, Math.min(100, score)));
+}
+
 export async function evaluateItem(
   item: Pick<HotspotItem, "title" | "summary" | "url" | "publishedAt" | "matchedKeyword" | "qualityScore" | "qualitySignals" | "evidenceCount" | "evidenceProviders" | "sourceReliability" | "communitySource">,
   keyword: Keyword | null,

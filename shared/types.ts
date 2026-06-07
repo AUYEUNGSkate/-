@@ -59,6 +59,8 @@ export interface HotspotItem {
   interactionViews: number;
   summarySource: SummarySource;
   interactionSource: InteractionSource;
+  priorityScore: number;
+  freshnessScore: number;
 }
 
 export interface AiEvaluation {

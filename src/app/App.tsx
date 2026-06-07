@@ -561,7 +561,7 @@ function HotspotCard({ item, onOpenOriginal }: { item: HotspotItem; onOpenOrigin
         </h3>
         <p>{displaySummary(item)}</p>
         <div className="signal-meta">
-          <span>质量 {item.qualityScore}</span>
+          <span>优先 {item.priorityScore}</span>
           <span>{formatDate(item.publishedAt)}</span>
           {interaction ? <span>{interaction}</span> : null}
         </div>
