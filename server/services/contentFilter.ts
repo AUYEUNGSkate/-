@@ -131,6 +131,32 @@ export function assessContentQuality(input: {
     score -= 45;
   }
 
+  // R1: 搜索引擎中转/索引页
+  if (/(?:baidu|sogou)\.com\/(?:link|sf|bai|url)/i.test(input.url ?? "")) {
+    signals.push("搜索引擎中转/索引页");
+    score -= 45;
+  }
+
+  // R2: SEO 堆砌标题
+  const commaSegments = title.split(/[,，、;；\s]+/).filter((s) => s.length > 1);
+  const enSegments = title.match(/[a-zA-Z]{2,}/g) ?? [];
+  if (commaSegments.length >= 10 || (enSegments.length >= 5 && /[\u4e00-\u9fff]/.test(title))) {
+    signals.push("疑似SEO堆砌标题");
+    score -= 40;
+  }
+
+  // R3: 目录/导航/聚合页标题
+  if (/目录|索引|标签|分类汇总|搜索结果|问答$|聚合|归档$/i.test(title)) {
+    signals.push("目录/导航类标题");
+    score -= 35;
+  }
+
+  // R4: 空内容标题（纯日期或极短无摘要页）
+  if (/^\d{4}[-/]\d{2}[-/]\d{2}/.test(title) || (title.length < 12 && !input.summary?.trim())) {
+    signals.push("空或纯日期标题");
+    score -= 50;
+  }
+
   score = Math.max(0, Math.min(100, score));
 
   return {

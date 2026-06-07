@@ -47,4 +47,51 @@ describe("content filter", () => {
     expect(result.score).toBeLessThan(60);
     expect(result.signals.join(" ")).toContain("分页");
   });
+
+  it("flags Baidu redirect/search index URLs", () => {
+    const result = assessContentQuality({
+      title: "Vibe Coding 入门指南",
+      url: "http://www.baidu.com/link?url=abc123",
+      summary: "some content"
+    });
+    expect(result.lowQuality).toBe(false);
+    expect(result.signals.join(" ")).toContain("搜索引擎中转");
+  });
+
+  it("flags SEO-stuffed comma-heavy titles", () => {
+    const result = assessContentQuality({
+      title: "vibe coding, AI编程, cursor, windsurf, bolt, lovable, replit, v0, github copilot, claude code",
+      url: "https://example.com/seo",
+      summary: "some content"
+    });
+    expect(result.signals.join(" ")).toContain("SEO堆砌");
+    expect(result.score).toBeLessThan(60);
+  });
+
+  it("flags navigation/directory page titles", () => {
+    const result = assessContentQuality({
+      title: "Vibe Coding 目录",
+      url: "https://example.com/dir",
+      summary: "some content"
+    });
+    expect(result.signals.join(" ")).toContain("目录/导航");
+  });
+
+  it("flags empty or date-only titles", () => {
+    const result = assessContentQuality({
+      title: "2026-06-07",
+      url: "https://example.com/date",
+      summary: ""
+    });
+    expect(result.lowQuality).toBe(true);
+  });
+
+  it("penalizes short title with no summary", () => {
+    const result = assessContentQuality({
+      title: "新闻标题",
+      url: "https://example.com/short",
+      summary: ""
+    });
+    expect(result.signals.join(" ")).toContain("空或纯日期标题");
+  });
 });
