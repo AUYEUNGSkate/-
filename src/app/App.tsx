@@ -27,6 +27,8 @@ export function App() {
   const [keywordFilter, setKeywordFilter] = useState<number | "all">("all");
   const [sortBy, setSortBy] = useState<"priority" | "newest" | "interaction" | "unread">("priority");
   const [readFilter, setReadFilter] = useState<"all" | "unread" | "read">("all");
+  const [sourceFilter, setSourceFilter] = useState<string>("all");
+  const [priorityFilter, setPriorityFilter] = useState<"all" | "hot" | "watch" | "low">("all");
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
   const [error, setError] = useState("");
@@ -57,13 +59,19 @@ export function App() {
     // Read filter
     if (readFilter === "unread") result = result.filter((item) => !item.readAt);
     else if (readFilter === "read") result = result.filter((item) => Boolean(item.readAt));
+    // Source filter
+    if (sourceFilter !== "all") result = result.filter((item) => getItemSourceLabel(item) === sourceFilter);
+    // Priority filter
+    if (priorityFilter === "hot") result = result.filter((item) => item.priorityScore >= 75);
+    else if (priorityFilter === "watch") result = result.filter((item) => item.priorityScore >= 50 && item.priorityScore < 75);
+    else if (priorityFilter === "low") result = result.filter((item) => item.priorityScore < 50);
     // Sort
     if (sortBy === "newest") result = [...result].sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
     else if (sortBy === "interaction") result = [...result].sort((a, b) => (b.interactionViews + b.interactionLikes) - (a.interactionViews + a.interactionLikes));
     else if (sortBy === "unread") result = [...result].sort((a, b) => (a.readAt ? 1 : 0) - (b.readAt ? 1 : 0) || new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
     else result = [...result].sort((a, b) => b.priorityScore - a.priorityScore);
     return result;
-  }, [dashboard, keywordFilter, sortBy, readFilter]);
+  }, [dashboard, keywordFilter, sortBy, readFilter, sourceFilter, priorityFilter]);
   const unreadItems = useMemo(() => getUnreadItems(dashboard?.items ?? []), [dashboard]);
   const unreadCount = unreadItems.length;
   const todayAdded = useMemo(() => getTodayAddedCount(dashboard?.items ?? []), [dashboard]);
@@ -250,6 +258,10 @@ export function App() {
             readFilter={readFilter}
             onSortBy={setSortBy}
             onReadFilter={setReadFilter}
+            sourceFilter={sourceFilter}
+            priorityFilter={priorityFilter}
+            onSourceFilter={setSourceFilter}
+            onPriorityFilter={setPriorityFilter}
             showArchived={showArchived}
             archivedItems={archivedItems}
             selectedArchivedIds={selectedArchivedIds}
@@ -426,6 +438,10 @@ function HotspotView({
   readFilter,
   onSortBy,
   onReadFilter,
+  sourceFilter,
+  priorityFilter,
+  onSourceFilter,
+  onPriorityFilter,
   showArchived,
   archivedItems,
   selectedArchivedIds,
@@ -446,6 +462,10 @@ function HotspotView({
   readFilter: "all" | "unread" | "read";
   onSortBy: (value: "priority" | "newest" | "interaction" | "unread") => void;
   onReadFilter: (value: "all" | "unread" | "read") => void;
+  sourceFilter: string;
+  priorityFilter: "all" | "hot" | "watch" | "low";
+  onSourceFilter: (value: string) => void;
+  onPriorityFilter: (value: "all" | "hot" | "watch" | "low") => void;
   showArchived: boolean;
   archivedItems: HotspotItem[];
   selectedArchivedIds: Set<number>;
@@ -496,10 +516,29 @@ function HotspotView({
           ))}
         </div>
         <div className="sort-group">
-          <span className="sort-label">筛选</span>
+          <span className="sort-label">已读</span>
           {(["all","unread","read"] as const).map((mode) => (
             <button key={mode} className={readFilter === mode ? "sort-chip active" : "sort-chip"} onClick={() => onReadFilter(mode)}>
               {{all:"全部",unread:"未读",read:"已读"}[mode]}
+            </button>
+          ))}
+        </div>
+        <div className="sort-group">
+          <span className="sort-label">重要</span>
+          {(["all","hot","watch","low"] as const).map((mode) => (
+            <button key={mode} className={priorityFilter === mode ? "sort-chip active" : "sort-chip"} onClick={() => onPriorityFilter(mode)}>
+              {{all:"全部",hot:"热门",watch:"关注",low:"低质"}[mode]}
+            </button>
+          ))}
+        </div>
+        <div className="sort-group">
+          <span className="sort-label">来源</span>
+          <button className={sourceFilter === "all" ? "sort-chip active" : "sort-chip"} onClick={() => onSourceFilter("all")}>
+            全部
+          </button>
+          {Array.from(new Set(allItems.map(getItemSourceLabel))).sort().map((name) => (
+            <button key={name} className={sourceFilter === name ? "sort-chip active" : "sort-chip"} onClick={() => onSourceFilter(name)}>
+              {name}
             </button>
           ))}
         </div>
