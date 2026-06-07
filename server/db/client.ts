@@ -337,8 +337,30 @@ export function getDefaultSources(): SourcePreset[] {
       builtin: true
     },
     {
+      name: "游研社",
+      url: "https://www.yystv.cn/rss/feed",
+      category: "国内媒体",
+      providerType: "rss",
+      reliabilityTier: "trusted",
+      communitySource: false,
+      minQualityScore: 62,
+      enabled: true,
+      builtin: true
+    },
+    {
+      name: "触乐",
+      url: "https://www.chuapp.com/feed",
+      category: "国内媒体",
+      providerType: "rss",
+      reliabilityTier: "trusted",
+      communitySource: false,
+      minQualityScore: 62,
+      enabled: true,
+      builtin: true
+    },
+    {
       name: "游民星空",
-      url: "https://rsshub.app/gamersky/news",
+      url: "https://rsshub.rssforever.com/gamersky/news",
       category: "国内媒体",
       providerType: "rss",
       reliabilityTier: "trusted",
