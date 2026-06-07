@@ -17,7 +17,7 @@ import {
   Trash2,
   Zap
 } from "lucide-react";
-import type { AiMode, DashboardPayload, HotspotItem, Keyword } from "../../shared/types";
+import type { AiMode, DashboardPayload, HotspotItem, Keyword, Source } from "../../shared/types";
 import { api, formatDate } from "../api-client/client";
 
 type ViewKey = "hotspots" | "monitor" | "sources";
@@ -255,6 +255,7 @@ export function App() {
             keywordFilter={keywordFilter}
             onKeywordFilter={changeKeywordFilter}
             onOpenOriginal={openOriginal}
+            sources={dashboard.sources}
             sortBy={sortBy}
             readFilter={readFilter}
             onSortBy={setSortBy}
@@ -432,6 +433,7 @@ function HotspotView({
   items,
   allItems,
   keywords,
+  sources,
   keywordFilter,
   onKeywordFilter,
   onOpenOriginal,
@@ -456,6 +458,7 @@ function HotspotView({
   items: HotspotItem[];
   allItems: HotspotItem[];
   keywords: Keyword[];
+  sources: Source[];
   keywordFilter: number | "all";
   onKeywordFilter: (id: number | "all") => void;
   onOpenOriginal: (item: HotspotItem) => void;
@@ -545,7 +548,7 @@ function HotspotView({
           value={sourceFilter}
           options={[
             { key: "all", label: "全部" },
-            ...Array.from(new Set(allItems.map(getItemSourceLabel))).sort().map((name) => ({ key: name, label: name }))
+            ...sources.filter((s) => s.enabled).map((s) => ({ key: s.name, label: s.name }))
           ]}
           onChange={(v) => onSourceFilter(v)}
         />
