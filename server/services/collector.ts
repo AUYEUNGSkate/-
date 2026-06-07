@@ -25,7 +25,7 @@ export interface CollectedItem {
   interactionReplies: number;
   interactionViews: number;
   summarySource: "ai" | "rss" | "metadata" | "title";
-  interactionSource: "bilibili" | "zhihu" | "wechat" | "html" | "rss" | "none";
+  interactionSource: "bilibili" | "zhihu" | "wechat" | "weibo" | "html" | "rss" | "none";
 }
 
 const parser = new XMLParser({
@@ -58,6 +58,9 @@ export async function collectFromSource(keyword: Keyword, source: Source): Promi
   }
   if (source.providerType === "bilibili_search") {
     return collectFromBilibiliSearch(keyword, source);
+  }
+  if (source.providerType === "weibo_hot") {
+    return collectFromWeiboHot(keyword, source);
   }
   const feedUrl = buildFeedUrl(source.url, keyword);
   const xml = await fetchText(feedUrl);
@@ -176,6 +179,70 @@ export async function collectFromBilibiliSearch(keyword: Keyword, source: Source
   }
 
   return Promise.all(results.map(enrichCollectedItem));
+}
+
+let weiboHotCache: { fetchedAt: number; topics: Array<{ word: string; rank: number; raw_hot: number }> } | null = null;
+
+export async function collectFromWeiboHot(keyword: Keyword, source: Source): Promise<CollectedItem[]> {
+  const now = Date.now();
+  if (weiboHotCache && now - weiboHotCache.fetchedAt < 300000) {
+    return filterWeiboTopics(weiboHotCache.topics, keyword, source);
+  }
+  const response = await fetch("https://weibo.com/ajax/side/hotSearch", {
+    headers: {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+      "Referer": "https://www.weibo.com"
+    }
+  });
+  if (!response.ok) throw new Error(`Weibo Hot HTTP ${response.status}`);
+  const payload = await response.json() as WeiboHotResponse;
+  const topics = (payload.data?.realtime ?? []).map((t) => ({
+    word: t.word ?? "",
+    rank: t.rank ?? 0,
+    raw_hot: t.raw_hot ?? 0
+  }));
+  weiboHotCache = { fetchedAt: now, topics };
+  return filterWeiboTopics(topics, keyword, source);
+}
+
+function filterWeiboTopics(topics: Array<{ word: string; rank: number; raw_hot: number }>, keyword: Keyword, source: Source): CollectedItem[] {
+  const term = keyword.term.toLowerCase();
+  const gameTerms = ["游戏", "电竞", "手游", "主机", "PS5", "Switch", "Steam", "原神", "米哈游", "腾讯", "网易", "独立游戏", "3A", "赛博", "黑神话", "VR", "AI", "虚幻", "Unity", "育碧", "暴雪", "R星"];
+  const fetchedAt = new Date().toISOString();
+  const results: CollectedItem[] = [];
+  for (const topic of topics) {
+    const word = topic.word;
+    const matchKeyword = word.includes(term) || term.split(" ").some((t) => word.includes(t));
+    const matchGame = gameTerms.some((gt) => word.includes(gt.toLowerCase()));
+    if (!matchKeyword && !matchGame) continue;
+    const title = word;
+    const url = `https://s.weibo.com/weibo?q=${encodeURIComponent(title)}`;
+    const quality = assessContentQuality({ title, url, summary: "" });
+    if (quality.lowQuality) continue;
+    results.push({
+      sourceId: source.id,
+      keywordId: keyword.id,
+      providerType: "weibo_hot" as ProviderType,
+      title: cleanArticleTitle(title),
+      url,
+      normalizedUrl: normalizeUrl(url),
+      summary: `微博热搜 #${topic.rank + 1}`,
+      publishedAt: fetchedAt,
+      fetchedAt,
+      matchedKeyword: keyword.term,
+      query: keyword.term,
+      rank: 0,
+      qualityScore: quality.score,
+      qualitySignals: quality.signals,
+      interactionLikes: 0,
+      interactionReposts: 0,
+      interactionReplies: 0,
+      interactionViews: topic.raw_hot,
+      interactionSource: ("weibo" as CollectedItem["interactionSource"]),
+      summarySource: ("rss" as CollectedItem["summarySource"]),
+    });
+  }
+  return results;
 }
 
 async function fetchText(url: string): Promise<string> {
@@ -362,6 +429,16 @@ interface BilibiliSearchResponse {
       pubdate?: number;
       arcurl?: string;
       author?: string;
+    }>;
+  };
+}
+
+interface WeiboHotResponse {
+  data?: {
+    realtime?: Array<{
+      word?: string;
+      rank?: number;
+      raw_hot?: number;
     }>;
   };
 }

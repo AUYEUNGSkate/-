@@ -218,6 +218,17 @@ export function getDefaultSources(): SourcePreset[] {
       builtin: true
     },
     {
+      name: "微博热搜",
+      url: "https://weibo.com/ajax/side/hotSearch",
+      category: "搜索增强",
+      providerType: "weibo_hot",
+      reliabilityTier: "search",
+      communitySource: false,
+      minQualityScore: 50,
+      enabled: true,
+      builtin: true
+    },
+    {
       name: "国内综合新闻",
       url: "https://news.google.com/rss/search?q={query}%20(%E6%B8%B8%E6%88%8F%20OR%20%E6%89%8B%E6%B8%B8%20OR%20%E5%8E%82%E5%95%86%20OR%20%E7%89%88%E5%8F%B7)&hl=zh-CN&gl=CN&ceid=CN:zh-Hans",
       category: "国内综合",
@@ -1030,7 +1041,7 @@ function inferProviderType(url: string): ProviderType {
 }
 
 function parseProviderType(value: string): ProviderType {
-  if (value === "google_news" || value === "brave_search" || value === "bilibili_search") return value;
+  if (value === "google_news" || value === "brave_search" || value === "bilibili_search" || value === "weibo_hot") return value;
   return "rss";
 }
 
