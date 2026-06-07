@@ -65,9 +65,16 @@ export async function collectFromSource(keyword: Keyword, source: Source): Promi
   const feedUrl = buildFeedUrl(source.url, keyword);
   const xml = await fetchText(feedUrl);
   let items = parseFeed(xml, source, keyword);
-  // 对不含 {query} 的全站 RSS 源，按关键词做标题相关性过滤
+  // 对不含 {query} 的全站 RSS 源，按关键词做标题+摘要相关性过滤
   if (!source.url.includes("{query}") && !keyword.accountMode) {
-    items = items.filter((item) => item.title.includes(keyword.term) || (keyword.scope && keyword.scope.split(/[,，、\s]+/).some((w) => item.title.includes(w))));
+    const term = keyword.term.toLowerCase();
+    items = items.filter((item) =>
+      item.title.toLowerCase().includes(term) ||
+      item.summary.toLowerCase().includes(term) ||
+      (keyword.scope && keyword.scope.split(/[,，、\s]+/).some((w) =>
+        item.title.includes(w) || item.summary.includes(w)
+      ))
+    );
   }
   return Promise.all(items.map(enrichCollectedItem));
 }
@@ -80,6 +87,11 @@ export function buildFeedUrl(template: string, keyword: Keyword): string {
     return template.replaceAll("{query}", encodeURIComponent(keyword.term));
   }
   const query = [keyword.term, keyword.scope].filter(Boolean).join(" ");
+  // 百度搜索：引号精确匹配+排除垃圾站
+  if (template.includes("baidu/search")) {
+    const preciseQuery = `"${query}" -site:csdn.net -site:zhihu.com -site:jianshu.com`;
+    return template.replaceAll("{query}", encodeURIComponent(preciseQuery));
+  }
   return template.replaceAll("{query}", encodeURIComponent(query));
 }
 
@@ -183,7 +195,14 @@ export async function collectFromBilibiliSearch(keyword: Keyword, source: Source
     });
   }
 
-  return Promise.all(results.map(enrichCollectedItem));
+  let enriched = await Promise.all(results.map(enrichCollectedItem));
+  // 二次过滤：标题/摘要必须与关键词相关
+  const term = keyword.term.toLowerCase();
+  enriched = enriched.filter((item) =>
+    item.title.toLowerCase().includes(term) ||
+    item.summary.toLowerCase().includes(term)
+  );
+  return enriched;
 }
 
 let weiboHotCache: { fetchedAt: number; topics: Array<{ word: string; rank: number; raw_hot: number }> } | null = null;

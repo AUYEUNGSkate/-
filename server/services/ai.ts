@@ -66,12 +66,29 @@ export function computeEvidenceScore(evidenceCount: number): number {
   return Math.min(100, evidenceCount * 25);
 }
 
-export function computePriorityScore(item: Pick<HotspotItem, "qualityScore" | "publishedAt" | "interactionViews" | "interactionLikes" | "sourceReliability" | "evidenceCount">): number {
+export function computeKeywordRelevance(title: string, summary: string, keywordTerm: string): number {
+  const term = keywordTerm.toLowerCase();
+  const haystack = `${title} ${summary}`.toLowerCase();
+  if (!term) return 50;
+  // 完全匹配完整关键词
+  if (haystack.includes(term)) return 100;
+  // 分词匹配
+  const tokens = term.split(/[,，、\s]+/).filter((t) => t.length > 1);
+  if (tokens.length > 0) {
+    const hitCount = tokens.filter((t) => haystack.includes(t)).length;
+    if (hitCount === tokens.length) return 85;
+    if (hitCount > 0) return 60 + hitCount * 10;
+  }
+  return 20;
+}
+
+export function computePriorityScore(item: Pick<HotspotItem, "qualityScore" | "publishedAt" | "interactionViews" | "interactionLikes" | "sourceReliability" | "evidenceCount" | "matchedKeyword" | "title" | "summary">): number {
   const freshness = computeFreshnessScore(item.publishedAt);
   const interaction = computeInteractionScore(item);
   const source = computeSourceScore(item);
   const evidence = computeEvidenceScore(item.evidenceCount);
-  const score = item.qualityScore * 0.25 + freshness * 0.25 + interaction * 0.25 + source * 0.15 + evidence * 0.10;
+  const relevance = computeKeywordRelevance(item.title, item.summary, item.matchedKeyword);
+  const score = item.qualityScore * 0.25 + freshness * 0.25 + interaction * 0.20 + source * 0.10 + relevance * 0.15 + evidence * 0.05;
   return Math.round(Math.max(0, Math.min(100, score)));
 }
 
