@@ -61,7 +61,7 @@ export function App() {
     if (readFilter === "unread") result = result.filter((item) => !item.readAt);
     else if (readFilter === "read") result = result.filter((item) => Boolean(item.readAt));
     // Source filter (keyword search)
-    if (sourceFilter) result = result.filter((item) => getItemSourceLabel(item).includes(sourceFilter));
+    if (sourceFilter) result = result.filter((item) => getItemSourceLabel(item).toLowerCase().includes(sourceFilter.toLowerCase()));
     // Priority filter
     if (priorityFilter === "hot") result = result.filter((item) => item.priorityScore >= 75);
     else if (priorityFilter === "watch") result = result.filter((item) => item.priorityScore >= 50 && item.priorityScore < 75);
