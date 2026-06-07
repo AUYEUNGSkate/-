@@ -623,16 +623,17 @@ function MonitorView(props: {
         <div className="stack-list">
           {props.dashboard.keywords.map((keyword) => (
             <div key={keyword.id} className="stack-row">
-              <button
-                className={keyword.enabled ? "row-icon-button active" : "row-icon-button"}
-                onClick={async () => {
-                  await api.updateKeyword(keyword.id, { enabled: !keyword.enabled });
-                  await props.refresh();
-                }}
-                title={keyword.enabled ? "禁用" : "启用"}
-              >
-                {keyword.enabled ? <Eye className="size-4" /> : <CircleOff className="size-4" />}
-              </button>
+              <label className="toggle-switch" title={keyword.enabled ? "禁用" : "启用"}>
+                <input
+                  type="checkbox"
+                  checked={keyword.enabled}
+                  onChange={async () => {
+                    await api.updateKeyword(keyword.id, { enabled: !keyword.enabled });
+                    await props.refresh();
+                  }}
+                />
+                <span className="toggle-slider" />
+              </label>
               <div className="row-copy">
                 <strong>{keyword.term}</strong>
                 <small>{keyword.scope || "未设置范围"}</small>
