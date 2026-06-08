@@ -82,6 +82,23 @@ export async function collectFromSource(keyword: Keyword, source: Source): Promi
   const feedUrl = buildFeedUrl(source.url, keyword);
   const xml = await fetchText(feedUrl);
   let items = parseFeed(xml, source, keyword);
+
+  // For {query} sources, also try expanded query variants for better recall
+  if (source.url.includes("{query}")) {
+    const expanded = expandQuery(keyword);
+    for (const variant of expanded) {
+      if (variant === buildQuery(keyword)) continue;
+      const variantUrl = source.url.replace("{query}", encodeURIComponent(variant));
+      try {
+        const variantXml = await fetchText(variantUrl);
+        const variantItems = parseFeed(variantXml, source, keyword);
+        items = items.concat(variantItems);
+      } catch {
+        // skip failed variants
+      }
+    }
+  }
+
   // 对不含 {query} 的全站 RSS 源，按关键词做标题+摘要相关性过滤
   if (!source.url.includes("{query}") && !keyword.accountMode) {
     const term = keyword.term.toLowerCase();
@@ -416,6 +433,37 @@ function extractOriginalUrl(raw: Record<string, unknown>, fallback: string): str
 function buildQuery(keyword: Keyword): string {
   if (keyword.accountMode) return keyword.term;
   return [keyword.term, keyword.scope].filter(Boolean).join(" ");
+}
+
+export function expandQuery(keyword: Keyword): string[] {
+  const term = keyword.term.trim();
+  const scope = keyword.scope.trim();
+
+  if (keyword.accountMode) return [term];
+
+  const variants: string[] = [];
+
+  // Variant 1: original combined query
+  const combined = [term, scope].filter(Boolean).join(" ");
+  if (combined) variants.push(combined);
+
+  // Variant 2: term without scope (if scope differs)
+  if (scope && term !== scope) {
+    variants.push(term);
+  }
+
+  // Variant 3: term + scope 拆词 (token-based)
+  if (scope) {
+    const tokens = scope.split(/[,，、\s]+/).filter(Boolean);
+    for (const token of tokens) {
+      const variant = `${term} ${token}`;
+      if (!variants.includes(variant) && variant !== combined) {
+        variants.push(variant);
+      }
+    }
+  }
+
+  return variants.slice(0, 4);
 }
 
 function parseDate(value: string): string | null {

@@ -32,9 +32,9 @@ describe("relevance pipeline", () => {
     expect(score).toBeGreaterThanOrEqual(60);
   });
 
-  it("scores no match as 20", () => {
+  it("scores no match as 0", () => {
     const score = computeKeywordRelevance("Game Review 2026", "something else", "vibe coding");
-    expect(score).toBe(20);
+    expect(score).toBe(0);
   });
 
   it("handles empty keyword gracefully", () => {

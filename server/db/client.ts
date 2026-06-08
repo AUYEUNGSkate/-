@@ -179,6 +179,8 @@ function initializeSchema(db: Database.Database) {
   addColumnIfMissing(db, "items", "author_verified", "INTEGER NOT NULL DEFAULT 0");
   addColumnIfMissing(db, "items", "interaction_danmaku", "INTEGER NOT NULL DEFAULT 0");
   addColumnIfMissing(db, "items", "interaction_quotes", "INTEGER NOT NULL DEFAULT 0");
+  addColumnIfMissing(db, "ai_evaluations", "keyword_mentioned", "INTEGER NOT NULL DEFAULT 0");
+  addColumnIfMissing(db, "ai_evaluations", "relevance_summary", "TEXT NOT NULL DEFAULT ''");
   addColumnIfMissing(db, "keywords", "account_mode", "INTEGER NOT NULL DEFAULT 0");
   addColumnIfMissing(db, "keywords", "account_platform", "TEXT NOT NULL DEFAULT ''");
   addColumnIfMissing(db, "keywords", "account_uid", "TEXT NOT NULL DEFAULT ''");
@@ -673,6 +675,8 @@ export const repositories = {
           e.summary AS ai_summary,
           e.reason,
           e.recommended_action,
+          e.keyword_mentioned,
+          e.relevance_summary,
           (
             SELECT json_group_array(DISTINCT provider_type)
             FROM item_evidence
@@ -778,6 +782,8 @@ export const repositories = {
           e.summary AS ai_summary,
           e.reason,
           e.recommended_action,
+          e.keyword_mentioned,
+          e.relevance_summary,
           (
             SELECT json_group_array(DISTINCT provider_type)
             FROM item_evidence
@@ -856,10 +862,12 @@ export const repositories = {
       getDb().prepare(`
         INSERT INTO ai_evaluations (
           item_id, relevance_score, credibility_score, novelty_score, hotness_score,
-          is_impersonation_likely, summary, reason, recommended_action, raw_json
+          is_impersonation_likely, summary, reason, recommended_action,
+          keyword_mentioned, relevance_summary, raw_json
         ) VALUES (
           @itemId, @relevanceScore, @credibilityScore, @noveltyScore, @hotnessScore,
-          @isImpersonationLikely, @summary, @reason, @recommendedAction, @rawJson
+          @isImpersonationLikely, @summary, @reason, @recommendedAction,
+          @keywordMentioned, @relevanceSummary, @rawJson
         )
         ON CONFLICT(item_id) DO UPDATE SET
           relevance_score = excluded.relevance_score,
@@ -870,6 +878,8 @@ export const repositories = {
           summary = excluded.summary,
           reason = excluded.reason,
           recommended_action = excluded.recommended_action,
+          keyword_mentioned = excluded.keyword_mentioned,
+          relevance_summary = excluded.relevance_summary,
           raw_json = excluded.raw_json
       `).run({
         itemId,
@@ -881,6 +891,8 @@ export const repositories = {
         summary: evaluation.summary,
         reason: evaluation.reason,
         recommendedAction: evaluation.recommendedAction,
+        keywordMentioned: evaluation.keywordMentioned ? 1 : 0,
+        relevanceSummary: evaluation.relevanceSummary ?? "",
         rawJson: JSON.stringify(evaluation)
       });
     }
@@ -980,6 +992,8 @@ interface ItemJoinedRow {
   ai_summary: string | null;
   reason: string | null;
   recommended_action: "notify" | "watch" | "ignore" | null;
+  keyword_mentioned: number | null;
+  relevance_summary: string | null;
   evidence_providers: string | null;
   evidence_source_names: string | null;
 }
@@ -1069,7 +1083,9 @@ function mapItem(row: ItemJoinedRow): HotspotItem {
       isImpersonationLikely: Boolean(row.is_impersonation_likely),
       summary: cleanSummary(row.ai_summary ?? ""),
       reason: cleanSummary(row.reason ?? ""),
-      recommendedAction: row.recommended_action ?? "watch"
+      recommendedAction: row.recommended_action ?? "watch",
+      keywordMentioned: Boolean(row.keyword_mentioned),
+      relevanceSummary: row.relevance_summary ?? ""
     }
   };
 }

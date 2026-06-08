@@ -1,7 +1,7 @@
 ﻿import { getDb, repositories } from "../db/client";
 import { collectFromSources } from "./collector";
 import { titleSimilarity } from "./dedupe";
-import { evaluateItem, computePriorityScore, computeFreshnessScore } from "./ai";
+import { evaluateItem, computePriorityScore, computeFreshnessScore, isKeywordMentioned, computeFinalRelevance } from "./ai";
 import type { CollectedItem } from "./collector";
 
 let scanning = false;
@@ -73,6 +73,14 @@ export async function runScan() {
     for (const candidate of aiCandidates) {
       const item = repositories.items.byId(candidate.id);
       if (!item) continue;
+
+      // Pre-filter: skip AI eval if keyword not mentioned at all
+      if (!isKeywordMentioned(item.title, item.summary, item.matchedKeyword)) {
+        console.log(`[scanner] skip AI eval (keyword not mentioned): ${item.title.slice(0, 40)}`);
+        getDb().prepare("UPDATE items SET status = ? WHERE id = ?").run("ignored", candidate.id);
+        continue;
+      }
+
       const keyword = item.keywordId ? keywords.find((entry) => entry.id === item.keywordId) ?? null : null;
       const source = item.sourceId ? sources.find((entry) => entry.id === item.sourceId) ?? null : null;
       const evaluation = await evaluateItem(item, keyword, source);
@@ -80,14 +88,19 @@ export async function runScan() {
       totals.evaluated += 1;
     }
 
-    // Step 5: Classify all items with priority score
+    // Step 5: Classify all items with priority score + relevance filter
     for (const candidate of scoredItems) {
       const item = repositories.items.byId(candidate.id);
       if (!item) continue;
-      const evaluation = item.evaluation;
+      const finalRelevance = computeFinalRelevance(item);
       let status: "new" | "watch" | "ignored";
 
-      if (candidate.priorityScore >= 75) {
+      // Relevance gate: low-relevance items are filtered out
+      if (finalRelevance < 30) {
+        status = "ignored";
+      } else if (finalRelevance < 50) {
+        status = candidate.priorityScore >= 75 ? "watch" : "ignored";
+      } else if (candidate.priorityScore >= 75) {
         status = "new";
       } else if (candidate.priorityScore >= 50) {
         status = "watch";

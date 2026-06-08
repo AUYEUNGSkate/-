@@ -77,6 +77,8 @@ export interface AiEvaluation {
   summary: string;
   reason: string;
   recommendedAction: RecommendedAction;
+  keywordMentioned?: boolean;
+  relevanceSummary?: string;
 }
 
 export interface AppSettings {

@@ -18,7 +18,9 @@ const RESPONSE_FORMAT = {
         isImpersonationLikely: { type: "boolean" },
         summary: { type: "string" },
         reason: { type: "string" },
-        recommendedAction: { type: "string", enum: ["notify", "watch", "ignore"] }
+        recommendedAction: { type: "string", enum: ["notify", "watch", "ignore"] },
+        keywordMentioned: { type: "boolean" },
+        relevanceSummary: { type: "string" }
       },
       required: [
         "relevanceScore",
@@ -28,7 +30,9 @@ const RESPONSE_FORMAT = {
         "isImpersonationLikely",
         "summary",
         "reason",
-        "recommendedAction"
+        "recommendedAction",
+        "keywordMentioned",
+        "relevanceSummary"
       ],
       additionalProperties: false
     }
@@ -67,19 +71,26 @@ export function computeEvidenceScore(evidenceCount: number): number {
 }
 
 export function computeKeywordRelevance(title: string, summary: string, keywordTerm: string): number {
-  const term = keywordTerm.toLowerCase();
+  const term = keywordTerm.toLowerCase().trim();
   const haystack = `${title} ${summary}`.toLowerCase();
   if (!term) return 50;
-  // 完全匹配完整关键词
+
+  // Tier 1: Full keyword match anywhere
   if (haystack.includes(term)) return 100;
-  // 分词匹配
+
+  // Tier 2: Token-based matching
   const tokens = term.split(/[,，、\s]+/).filter((t) => t.length > 1);
-  if (tokens.length > 0) {
-    const hitCount = tokens.filter((t) => haystack.includes(t)).length;
-    if (hitCount === tokens.length) return 85;
-    if (hitCount > 0) return 60 + hitCount * 10;
-  }
-  return 20;
+  if (tokens.length === 0) return haystack.includes(term) ? 100 : 20;
+
+  const hits = tokens.filter((t) => haystack.includes(t));
+  const hitRatio = hits.length / tokens.length;
+  const titleHasKeyword = tokens.some((t) => title.toLowerCase().includes(t));
+
+  if (hitRatio >= 1.0) return 85;
+  if (hitRatio >= 0.5 && titleHasKeyword) return 70;
+  if (hitRatio >= 0.5) return 50;
+  if (hitRatio > 0) return 30;
+  return 0;
 }
 
 export function computePriorityScore(item: Pick<HotspotItem, "qualityScore" | "publishedAt" | "interactionViews" | "interactionLikes" | "sourceReliability" | "evidenceCount" | "matchedKeyword" | "title" | "summary">): number {
@@ -88,7 +99,7 @@ export function computePriorityScore(item: Pick<HotspotItem, "qualityScore" | "p
   const source = computeSourceScore(item);
   const evidence = computeEvidenceScore(item.evidenceCount);
   const relevance = computeKeywordRelevance(item.title, item.summary, item.matchedKeyword);
-  const score = item.qualityScore * 0.25 + freshness * 0.25 + interaction * 0.20 + source * 0.10 + relevance * 0.15 + evidence * 0.05;
+  const score = relevance * 0.30 + item.qualityScore * 0.20 + freshness * 0.20 + interaction * 0.15 + source * 0.10 + evidence * 0.05;
   return Math.round(Math.max(0, Math.min(100, score)));
 }
 
@@ -195,14 +206,16 @@ async function evaluateWithOpenRouter(
       messages: [
         {
           role: "system",
-          content:
-            "你是游戏行业情报分析员。请判断内容是否是真正值得关注的游戏行业或技术热点。"
-            + " isImpersonationLikely 仅当内容**故意冒充**游戏公司/产品/知名人物的官方身份发布虚假信息时才标记为 true。"
-            + " 判断冒名的严格原则："
-            + " (1) 必须是内容本身自称官方（如'米哈游官方公告''任天堂宣布'），且来源明显非官方渠道；"
-            + " (2) 第三方报道、RSS 聚合转载、引用官方声明、提及游戏名称均不属于冒名；"
-            + " (3) 宁可漏判，不可误判。只在有明确证据时才标记。"
-            + " 只输出符合 JSON Schema 的结果。"
+          content: `你根据给定的关键词判断文章的相关性。
+核心任务：评估文章是否**真正讨论**了关键词所代表的话题，而非仅字面提及。
+keywordMentioned: 文章是否确实涉及关键词主题（区分"提到了词"与"讨论了话题"）。
+relevanceScore: 文章内容与关键词的直接关联程度（0=完全无关，100=高度核心）。
+relevanceSummary: 用一句话（≤50字）说明文章与关键词的具体关联。
+relevanceScore 严格按如下标准：
+0-20: 完全无关或仅偶然出现关键词；20-40: 仅字面提及但未实质性讨论；
+40-60: 部分相关但核心主题不同；60-80: 相关但非专注该话题；
+80-100: 文章核心主题就是该关键词话题。
+只输出符合 JSON Schema 的结果。`
         },
         {
           role: "user",
@@ -249,14 +262,18 @@ function mockEvaluation(
 ): AiEvaluation {
   const haystack = `${item.title} ${item.summary}`.toLowerCase();
   const term = (keyword?.term ?? item.matchedKeyword).toLowerCase();
-  const techSignals = ["ai", "unity", "unreal", "steam", "agent", "编程", "游戏", "出海", "发行", "引擎"];
-  const signalHits = techSignals.filter((signal) => haystack.includes(signal.toLowerCase())).length;
-  const relevance = haystack.includes(term) ? 82 : Math.min(65 + signalHits * 6, 86);
+  const baseMatch = computeKeywordRelevance(item.title, item.summary, term);
+  const keywordMentioned = baseMatch >= 50;
+  const relevance = keywordMentioned ? baseMatch : Math.min(baseMatch, 20);
   const credibilityBase = source?.reliabilityTier === "official" ? 86 : source?.reliabilityTier === "trusted" ? 78 : source?.reliabilityTier === "community" ? 58 : 70;
   const credibility = Math.min(95, credibilityBase + Math.max(0, item.evidenceCount - 1) * 8 + Math.floor((item.qualityScore - 70) / 4));
   const novelty = Date.now() - new Date(item.publishedAt).getTime() <= 24 * 60 * 60 * 1000 ? 78 : 52;
-  const hotness = Math.min(58 + signalHits * 8 + (relevance > 75 ? 8 : 0), 92);
+  const hotness = relevance > 60 ? Math.min(50 + relevance * 0.35, 90) : 35;
   const suspicious = /免费领取|破解|内部绝密|必看爆料/.test(item.title);
+  const relevanceSummary = keywordMentioned
+    ? `标题与摘要中包含关键词"${term}"的相关讨论`
+    : `内容未明显涉及关键词"${term}"的核心话题`;
+
   return sanitizeEvaluation({
     relevanceScore: relevance,
     credibilityScore: suspicious ? 45 : credibility,
@@ -266,15 +283,16 @@ function mockEvaluation(
     summary: item.summary ? cleanSummary(item.summary).slice(0, 120) : cleanArticleTitle(item.title),
     reason: suspicious
       ? "标题存在明显营销或爆料话术，先降级为待观察。"
-      : `Mock 模式基于关键词、质量分 ${item.qualityScore}、${item.evidenceCount} 条证据和来源等级给出临时评分。`,
-    recommendedAction: !suspicious && item.qualityScore >= 70 && relevance >= 70 && hotness >= 70 ? "notify" : "watch"
+      : `Mock: baseMatch=${baseMatch}, keywordMentioned=${keywordMentioned}`,
+    recommendedAction: !suspicious && relevance >= 60 && item.qualityScore >= 70 ? "notify" : "watch",
+    keywordMentioned,
+    relevanceSummary
   });
 }
 
 function sanitizeEvaluation(input: AiEvaluation): AiEvaluation {
   const credibilityScore = clamp(input.credibilityScore);
   const isImpersonationLikely = Boolean(input.isImpersonationLikely)
-    // Guard: 高可信度 + 高质量分不太可能同时是冒充，降低误判
     && !(credibilityScore >= 75 && clamp(Math.max(input.relevanceScore, input.noveltyScore)) >= 70);
 
   return {
@@ -285,8 +303,35 @@ function sanitizeEvaluation(input: AiEvaluation): AiEvaluation {
     isImpersonationLikely,
     summary: cleanSummary(String(input.summary ?? "")).slice(0, 300),
     reason: String(input.reason ?? "").slice(0, 600),
-    recommendedAction: ["notify", "watch", "ignore"].includes(input.recommendedAction) ? input.recommendedAction : "watch"
+    recommendedAction: ["notify", "watch", "ignore"].includes(input.recommendedAction) ? input.recommendedAction : "watch",
+    keywordMentioned: Boolean(input.keywordMentioned),
+    relevanceSummary: String(input.relevanceSummary ?? "").slice(0, 120)
   };
+}
+
+export function isKeywordMentioned(title: string, summary: string, keywordTerm: string): boolean {
+  return computeKeywordRelevance(title, summary, keywordTerm) >= 30;
+}
+
+export function computeFinalRelevance(item: Pick<HotspotItem, "title" | "summary" | "matchedKeyword" | "evaluation">): number {
+  const baseMatch = computeKeywordRelevance(item.title, item.summary, item.matchedKeyword);
+  const hasEval = item.evaluation !== null && item.evaluation !== undefined;
+  const aiRelevance = item.evaluation?.relevanceScore ?? 0;
+  const keywordMentioned = item.evaluation?.keywordMentioned ?? (baseMatch >= 30);
+
+  // Semantic boost from AI evaluation (only applied when AI eval exists)
+  let semanticBoost = 1.0;
+  if (hasEval) {
+    if (aiRelevance >= 80) semanticBoost = 1.3;
+    else if (aiRelevance >= 60) semanticBoost = 1.1;
+    else if (aiRelevance >= 40) semanticBoost = 1.0;
+    else if (aiRelevance >= 20) semanticBoost = 0.9;
+    else semanticBoost = 0.8;
+  }
+
+  const mentionedBonus = keywordMentioned ? 1.0 : 0.3;
+
+  return Math.round(Math.min(100, baseMatch * mentionedBonus * semanticBoost));
 }
 
 function clamp(value: number): number {
