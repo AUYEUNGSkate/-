@@ -9,3 +9,4 @@ brand-design-md/
 apple-refactor-*.png
 coverage/
 .DS_Store
+.vercel/
