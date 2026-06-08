@@ -226,12 +226,26 @@ export function App() {
     await refresh();
   }
 
-  if (loading || !dashboard) {
+  if (loading) {
     return (
       <main className="radar-loading-shell">
         <div className="radar-loading-card">
           <Loader2 className="size-5 animate-spin" />
           正在唤醒热点雷达
+        </div>
+      </main>
+    );
+  }
+
+  if (!dashboard) {
+    return (
+      <main className="radar-loading-shell">
+        <div className="radar-error-card">
+          <p>无法连接到后端服务</p>
+          <small>{error || "API 服务未可用，请确认后端已启动"}</small>
+          <button className="solid-action-button" onClick={() => { setLoading(true); setError(""); void refresh(); }}>
+            重试
+          </button>
         </div>
       </main>
     );

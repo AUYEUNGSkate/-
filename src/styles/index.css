@@ -82,6 +82,30 @@ button:disabled {
   color: var(--radar-muted);
 }
 
+.radar-error-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 28px 32px;
+  border: 1px solid rgba(251, 113, 133, 0.28);
+  border-radius: 12px;
+  background: rgba(251, 113, 133, 0.06);
+  text-align: center;
+  max-width: 360px;
+}
+
+.radar-error-card p {
+  color: var(--radar-ink);
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.radar-error-card small {
+  color: var(--radar-muted);
+  line-height: 1.55;
+}
+
 .radar-nav {
   position: sticky;
   top: 0;
