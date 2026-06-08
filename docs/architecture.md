@@ -56,14 +56,18 @@ flowchart TD
   B --> D
   E["30 分钟 worker"] --> D
   F["手动扫描 API"] --> D
-  D --> G["RSS/RSSHub/可选 Google News 采集"]
+  D --> G["RSS/RSSHub/B站/微博采集"]
   G --> H["标准化候选内容"]
   H --> I["恢复真实原文 URL / 解析短链"]
   I --> J["B站互动量/站点简介补全"]
-  J --> K["URL/标题/时间窗口去重"]
-  K --> L["OpenRouter AI 判别"]
-  L --> M["保存热点与评分"]
-  M --> N["站内未读徽标/列表"]
+  J --> K["URL/标题去重"]
+  K --> L["新鲜度打分"]
+  L --> M["质量过滤"]
+  M --> N["入库"]
+  N --> O["优先级综合评分"]
+  O --> P["Top-15 OpenRouter AI 判别"]
+  P --> Q["分级 + 排序展示"]
+  Q --> R["站内未读徽标/列表"]
 ```
 
 ## 推荐目录结构
@@ -75,6 +79,7 @@ E:\热点工具
 │  ├─ architecture.md
 │  ├─ openrouter-setup.md
 │  ├─ source-plan.md
+│  ├─ progress.md
 │  └─ acceptance-checklist.md
 ├─ package.json
 ├─ .env.example
@@ -135,12 +140,13 @@ E:\热点工具
 ## API 设计
 
 | 方法 | 路径 | 说明 |
-|---|---|---|
+|------|------|------|
 | `GET` | `/api/health` | 服务健康检查 |
+| `GET` | `/api/dashboard` | 获取仪表盘 |
 | `GET` | `/api/settings` | 获取配置 |
 | `PATCH` | `/api/settings` | 更新扫描频率、AI 模式等 |
 | `GET` | `/api/keywords` | 获取关键词 |
-| `POST` | `/api/keywords` | 新增关键词 |
+| `POST` | `/api/keywords` | 新增关键词（自动判别游戏/非游戏、账号/话题） |
 | `PATCH` | `/api/keywords/:id` | 更新关键词 |
 | `DELETE` | `/api/keywords/:id` | 删除关键词 |
 | `GET` | `/api/sources` | 获取信息源 |
@@ -150,6 +156,11 @@ E:\热点工具
 | `GET` | `/api/items` | 获取热点列表 |
 | `PATCH` | `/api/items/:id/read` | 标记已读 |
 | `POST` | `/api/scan` | 手动触发扫描 |
+| `GET` | `/api/summary` | AI 简报 |
+| `GET` | `/api/items/archived` | 获取归档列表 |
+| `POST` | `/api/items/:id/restore` | 恢复单条归档 |
+| `POST` | `/api/items/batch-restore` | 批量恢复归档 |
+| `POST` | `/api/items/batch-delete` | 批量删除归档 |
 | `POST` | `/api/items/archive-stale` | 手动归档过期内容 |
 
 ## 数据表

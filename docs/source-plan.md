@@ -41,19 +41,32 @@ v1 信息源收敛为“国内无 Key 来源优先 + 直连优先”。主要从
 - 后续若接入平台 API 获取真实互动数据后可重新启用
 - B站保留账号源与视频互动补全，不做泛社区搜索
 
-### 国内直连 RSS 源（v1 新增）
+### 国内直连 RSS 源（v1 当前活跃）
 
 这些源无需 API Key，无需翻墙，直接 HTTP 抓取：
 
-| 源名称 | RSS URL | 分类 | 说明 |
-|--------|---------|------|------|
-| 机核网 | `https://www.gcores.com/rss` | 国内媒体 | 原生 RSS，游戏文化/新闻 |
-| 百度搜索 | `https://rsshub.rssforever.com/baidu/search/{query}` | 国内综合 | RSSHub 桥接，关键词搜索 |
-| 游民星空 | `https://rsshub.rssforever.com/gamersky/news` | 国内媒体 | RSSHub 桥接，游戏资讯 |
-| 3DM 游戏 | `https://rsshub.rssforever.com/3dm/news` | 国内媒体 | RSSHub 桥接，游戏新闻 |
-| 搜狐游戏 | `https://rsshub.rssforever.com/sohu/game` | 国内综合 | RSSHub 桥接，综合游戏频道 |
-| 网易游戏 | `https://rsshub.rssforever.com/163/dy` | 国内综合 | RSSHub 桥接，网易游戏频道 |
-| 17173 新闻 | `https://rsshub.rssforever.com/17173/news` | 国内媒体 | RSSHub 桥接，游戏资讯 |
+| 源名称 | URL | 类型 | 说明 |
+|--------|-----|------|------|
+| **机核网** | `gcores.com/rss` | RSS 直连 | 游戏文化/新闻，30条/次 |
+| **游研社** | `yystv.cn/rss/feed` | RSS 直连 | 游戏历史/文化/产业，12条/次 |
+| **触乐** | `chuapp.com/feed` | RSS 直连 | 游戏新闻/评测/产业，30条/次 |
+| **B站视频搜索** | `api.bilibili.com` | 公开 API | 视频搜索，≥1000 播放过滤 |
+| **微博热搜** | `weibo.com/ajax/side/hotSearch` | 公开 API | 热搜榜，5分钟缓存，按关键词+游戏词库过滤 |
+| **RSSHub 百度搜索** | `rsshub.rssforever.com/baidu/search/{query}` | RSSHub 桥接 | 关键词搜索，引号精确匹配 + 排除 CSDN/知乎/简书 |
+
+### 已停用源
+
+| 源名称 | 停用原因 |
+|--------|----------|
+| 游民星空 | 噪音内容多，过滤效果不稳定 |
+| 3DM/搜狐/网易/17173 | RSSHub 路由返回 503 |
+| B站账号视频/动态 | RSSHub B站路由返回 503 |
+| Google News 全系列 | 国内不可用 |
+| 微博/B站/TapTap/知乎/贴吧 社区搜索 | 低质回复/评论混入严重 |
+
+### 关键词自动判别
+
+系统自动检测关键词是否为游戏话题（含游戏/电竞/主机/Steam/Unity 等 19 个词），非游戏词自动跳过机核网/游研社/触乐，仅查百度+B站+微博。
 
 ### 账号/官方/博主源
 
