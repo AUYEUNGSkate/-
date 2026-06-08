@@ -59,6 +59,11 @@
 | 可读性 | 标题、评分、来源、时间、AI 理由清晰 |
 | 状态反馈 | 扫描中、扫描成功、扫描失败都有反馈 |
 | 无重叠 | 移动端和桌面端文字不互相遮挡 |
+| 双栏工作台 | 桌面宽度下热点流在左、AI 洞察栏在右，布局稳定 |
+| 移动单栏 | 375px/640px 宽度下自动单栏，无横向滚动 |
+| AI 洞察栏 | 显示 AI 简报、未读数、高优先级数、今日新增和当前筛选摘要 |
+| 高优先级小列表 | 右侧 Top 高优先级热点点击后能打开原文并标记已读 |
+| AI 分析理由 | 有 AI 评估的热点默认展示关联理由，无评估内容不显示误导性模块 |
 
 ## 测试命令
 
@@ -66,6 +71,7 @@
 
 ```bash
 npm test
+npm run typecheck
 npm run build
 ```
 
@@ -73,6 +79,7 @@ Windows 环境建议优先使用 Git Bash 运行上面的命令，避免 PowerSh
 
 ```powershell
 & 'D:\Node.js\npm.cmd' test
+& 'D:\Node.js\npm.cmd' run typecheck
 & 'D:\Node.js\npm.cmd' run build
 ```
 

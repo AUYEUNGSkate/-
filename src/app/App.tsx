@@ -434,7 +434,7 @@ function CommandDeck({
   ];
 
   return (
-    <section className="metric-grid" aria-label="热点概览">
+    <section className="metric-grid status-strip" aria-label="热点概览">
       {metrics.map((metric) => (
         <div key={metric.label} className={`metric-card ${metric.tone}`}>
           <span>{metric.label}</span>
@@ -502,6 +502,17 @@ function HotspotView({
 }) {
   const activeKeywords = keywords.filter((keyword) => keyword.enabled);
   const keywordCounts = new Map<number, number>();
+  const filterSummary = getFilterSummary({
+    keywordFilter,
+    keywords,
+    sortBy,
+    readFilter,
+    sourceFilter,
+    priorityFilter,
+    hotspotSearch,
+    visibleCount: items.length,
+    totalCount: allItems.length
+  });
 
   for (const item of allItems) {
     if (item.keywordId === null) continue;
@@ -510,153 +521,285 @@ function HotspotView({
 
   return (
     <div className="hotspot-workbench">
-      <section className="track-panel" aria-label="固定关键词热点追踪">
-        <div className="track-chip-row">
-          <button className={keywordFilter === "all" ? "track-chip active" : "track-chip"} onClick={() => onKeywordFilter("all")}>
-            全部
-            <span>{allItems.length}</span>
-          </button>
-          {activeKeywords.map((keyword) => (
-            <button
-              key={keyword.id}
-              className={keywordFilter === keyword.id ? "track-chip active" : "track-chip"}
-              onClick={() => onKeywordFilter(keyword.id)}
-              title={keyword.scope || keyword.term}
-            >
-              {keyword.term}
-              <span>{keywordCounts.get(keyword.id) ?? 0}</span>
+      <div className="hotspot-main-column">
+        <section className="track-panel" aria-label="固定关键词热点追踪">
+          <div className="track-chip-row">
+            <button className={keywordFilter === "all" ? "track-chip active" : "track-chip"} onClick={() => onKeywordFilter("all")}>
+              全部
+              <span>{allItems.length}</span>
             </button>
-          ))}
-        </div>
-      </section>
-
-      <SummaryPanel items={allItems} />
-
-      <div className="sort-filter-bar">
-        <div className="hotspot-search-bar">
-          <Search className="size-4" />
-          <input
-            type="text"
-            placeholder="搜索热点标题、内容..."
-            value={hotspotSearch}
-            onChange={(e) => onHotspotSearchChange(e.target.value)}
-          />
-          {hotspotSearch ? (
-            <button
-              className="hotspot-search-clear"
-              onClick={() => onHotspotSearchChange("")}
-              title="清除搜索"
-            >
-              ×
-            </button>
-          ) : null}
-        </div>
-        <FilterDropdown
-          label="排序"
-          value={sortBy}
-          options={[
-            { key: "priority", label: "优先" },
-            { key: "newest", label: "最新" },
-            { key: "interaction", label: "最热互动" },
-            { key: "unread", label: "仅未读" }
-          ]}
-          onChange={(v) => onSortBy(v as typeof sortBy)}
-        />
-        <FilterDropdown
-          label="已读"
-          value={readFilter}
-          options={[
-            { key: "all", label: "全部" },
-            { key: "unread", label: "未读" },
-            { key: "read", label: "已读" }
-          ]}
-          onChange={(v) => onReadFilter(v as typeof readFilter)}
-        />
-        <FilterDropdown
-          label="重要"
-          value={priorityFilter}
-          options={[
-            { key: "all", label: "全部" },
-            { key: "hot", label: "热门 ≥75" },
-            { key: "watch", label: "关注 50-74" },
-            { key: "low", label: "低质 <50" }
-          ]}
-          onChange={(v) => onPriorityFilter(v as typeof priorityFilter)}
-        />
-        <input
-          className="source-search-input"
-          type="text"
-          placeholder="搜索来源..."
-          value={sourceFilter}
-          onChange={(e) => onSourceFilter(e.target.value)}
-        />
-      </div>
-
-      <section className="feed-panel">
-        <div className="feed-head">
-          <SectionHeader icon={<Sparkles className="size-4" />} title={showArchived ? "归档热点" : "实时热点流"} />
-          <div className="feed-actions">
-            <span>每 30 分钟自动更新</span>
-            <button 
-              className={showArchived ? "toolbar-button active" : "toolbar-button"}
-              onClick={() => {
-                onShowArchived(!showArchived);
-                if (!showArchived) onLoadArchived();
-              }}
-            >
-              {showArchived ? "返回主列表" : "查看归档"}
-            </button>
-          </div>
-        </div>
-        {showArchived ? (
-          <div className="archived-view">
-            <div className="archived-toolbar">
-              <button onClick={onBatchRestore} disabled={selectedArchivedIds.size === 0}>
-                批量恢复 ({selectedArchivedIds.size})
+            {activeKeywords.map((keyword) => (
+              <button
+                key={keyword.id}
+                className={keywordFilter === keyword.id ? "track-chip active" : "track-chip"}
+                onClick={() => onKeywordFilter(keyword.id)}
+                title={keyword.scope || keyword.term}
+              >
+                {keyword.term}
+                <span>{keywordCounts.get(keyword.id) ?? 0}</span>
               </button>
-              <button onClick={onBatchDelete} disabled={selectedArchivedIds.size === 0}>
-                批量删除
+            ))}
+          </div>
+        </section>
+
+        <div className="sort-filter-bar console-bar">
+          <div className="hotspot-search-bar">
+            <Search className="size-4" />
+            <input
+              type="text"
+              placeholder="搜索热点标题、内容..."
+              value={hotspotSearch}
+              onChange={(e) => onHotspotSearchChange(e.target.value)}
+            />
+            {hotspotSearch ? (
+              <button
+                className="hotspot-search-clear"
+                onClick={() => onHotspotSearchChange("")}
+                title="清除搜索"
+              >
+                ×
+              </button>
+            ) : null}
+          </div>
+          <FilterDropdown
+            label="排序"
+            value={sortBy}
+            options={[
+              { key: "priority", label: "优先" },
+              { key: "newest", label: "最新" },
+              { key: "interaction", label: "最热互动" },
+              { key: "unread", label: "仅未读" }
+            ]}
+            onChange={(v) => onSortBy(v as typeof sortBy)}
+          />
+          <FilterDropdown
+            label="已读"
+            value={readFilter}
+            options={[
+              { key: "all", label: "全部" },
+              { key: "unread", label: "未读" },
+              { key: "read", label: "已读" }
+            ]}
+            onChange={(v) => onReadFilter(v as typeof readFilter)}
+          />
+          <FilterDropdown
+            label="重要"
+            value={priorityFilter}
+            options={[
+              { key: "all", label: "全部" },
+              { key: "hot", label: "热门 ≥75" },
+              { key: "watch", label: "关注 50-74" },
+              { key: "low", label: "低质 <50" }
+            ]}
+            onChange={(v) => onPriorityFilter(v as typeof priorityFilter)}
+          />
+          <input
+            className="source-search-input"
+            type="text"
+            placeholder="搜索来源..."
+            value={sourceFilter}
+            onChange={(e) => onSourceFilter(e.target.value)}
+          />
+        </div>
+
+        <section className="feed-panel">
+          <div className="feed-head">
+            <SectionHeader icon={<Sparkles className="size-4" />} title={showArchived ? "归档热点" : "实时热点流"} />
+            <div className="feed-actions">
+              <span>每 30 分钟自动更新</span>
+              <button 
+                className={showArchived ? "toolbar-button active" : "toolbar-button"}
+                onClick={() => {
+                  onShowArchived(!showArchived);
+                  if (!showArchived) onLoadArchived();
+                }}
+              >
+                {showArchived ? "返回主列表" : "查看归档"}
               </button>
             </div>
-            <div className="archived-list">
-              {archivedItems.length === 0 ? (
-                <EmptyState title="暂无归档内容" body="已读信息会在 24 小时后自动归档。" />
-              ) : (
-                archivedItems.map((item) => (
-                  <div key={item.id} className="archived-item">
-                    <input
-                      type="checkbox"
-                      checked={selectedArchivedIds.has(item.id)}
-                      onChange={(e) => onToggleArchived(item.id, e.target.checked)}
-                    />
-                    <div className="archived-item-content">
-                      <strong>{item.title}</strong>
-                      <small>{item.matchedKeyword} · {formatDate(item.publishedAt)}</small>
+          </div>
+          {showArchived ? (
+            <div className="archived-view">
+              <div className="archived-toolbar">
+                <button onClick={onBatchRestore} disabled={selectedArchivedIds.size === 0}>
+                  批量恢复 ({selectedArchivedIds.size})
+                </button>
+                <button onClick={onBatchDelete} disabled={selectedArchivedIds.size === 0}>
+                  批量删除
+                </button>
+              </div>
+              <div className="archived-list">
+                {archivedItems.length === 0 ? (
+                  <EmptyState title="暂无归档内容" body="已读信息会在 24 小时后自动归档。" />
+                ) : (
+                  archivedItems.map((item) => (
+                    <div key={item.id} className="archived-item">
+                      <input
+                        type="checkbox"
+                        checked={selectedArchivedIds.has(item.id)}
+                        onChange={(e) => onToggleArchived(item.id, e.target.checked)}
+                      />
+                      <div className="archived-item-content">
+                        <strong>{item.title}</strong>
+                        <small>{item.matchedKeyword} · {formatDate(item.publishedAt)}</small>
+                      </div>
+                      <button onClick={() => onRestore(item.id)}>恢复</button>
                     </div>
-                    <button onClick={() => onRestore(item.id)}>恢复</button>
-                  </div>
+                  ))
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="signal-list">
+              {items.length === 0 ? (
+                <EmptyState title="暂无候选内容" body="当前筛选下没有新的有效资讯。" />
+              ) : (
+                items.map((item) => (
+                  <HotspotCard
+                    key={item.id}
+                    item={item}
+                    onOpenOriginal={onOpenOriginal}
+                  />
                 ))
               )}
             </div>
-          </div>
-        ) : (
-          <div className="signal-list">
-            {items.length === 0 ? (
-              <EmptyState title="暂无候选内容" body="当前筛选下没有新的有效资讯。" />
-            ) : (
-              items.map((item) => (
-                <HotspotCard
-                  key={item.id}
-                  item={item}
-                  onOpenOriginal={onOpenOriginal}
-                />
-              ))
-            )}
-          </div>
-        )}
-      </section>
+          )}
+        </section>
+      </div>
+
+      <InsightRail
+        allItems={allItems}
+        visibleItems={items}
+        filterSummary={filterSummary}
+        onOpenOriginal={onOpenOriginal}
+      />
     </div>
   );
+}
+
+function InsightRail({
+  allItems,
+  visibleItems,
+  filterSummary,
+  onOpenOriginal
+}: {
+  allItems: HotspotItem[];
+  visibleItems: HotspotItem[];
+  filterSummary: string;
+  onOpenOriginal: (item: HotspotItem) => void;
+}) {
+  const unreadCount = getUnreadItems(allItems).length;
+  const todayAdded = getTodayAddedCount(allItems);
+  const hotCount = allItems.filter((item) => item.priorityScore >= 75).length;
+  const priorityItems = [...allItems]
+    .filter((item) => item.priorityScore >= 50)
+    .sort((a, b) => b.priorityScore - a.priorityScore)
+    .slice(0, 5);
+
+  return (
+    <aside className="insight-rail" aria-label="AI 洞察">
+      <SummaryPanel items={allItems} />
+      <section className="insight-panel">
+        <div className="insight-panel-head">
+          <span>FILTER</span>
+          <strong>{visibleItems.length}</strong>
+        </div>
+        <p className="filter-summary">{filterSummary}</p>
+      </section>
+      <section className="insight-panel insight-metrics">
+        <InsightMetric label="未读" value={unreadCount} tone="cyan" />
+        <InsightMetric label="高优先" value={hotCount} tone="red" />
+        <InsightMetric label="今日" value={todayAdded} tone="green" />
+      </section>
+      <PriorityMiniList items={priorityItems} onOpenOriginal={onOpenOriginal} />
+    </aside>
+  );
+}
+
+function InsightMetric({ label, value, tone }: { label: string; value: number; tone: "cyan" | "red" | "green" }) {
+  return (
+    <div className={`insight-metric ${tone}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function PriorityMiniList({ items, onOpenOriginal }: { items: HotspotItem[]; onOpenOriginal: (item: HotspotItem) => void }) {
+  return (
+    <section className="insight-panel">
+      <div className="insight-panel-head">
+        <span>PRIORITY</span>
+        <strong>Top</strong>
+      </div>
+      <div className="priority-mini-list">
+        {items.length === 0 ? (
+          <p className="priority-mini-empty">暂无高优先级热点</p>
+        ) : (
+          items.map((item) => (
+            <button key={item.id} className="priority-mini-item" onClick={() => onOpenOriginal(item)}>
+              <span>{item.priorityScore}</span>
+              <strong>{item.title}</strong>
+              <small>{item.matchedKeyword} · {getItemSourceLabel(item)}</small>
+            </button>
+          ))
+        )}
+      </div>
+    </section>
+  );
+}
+
+function getFilterSummary({
+  keywordFilter,
+  keywords,
+  sortBy,
+  readFilter,
+  sourceFilter,
+  priorityFilter,
+  hotspotSearch,
+  visibleCount,
+  totalCount
+}: {
+  keywordFilter: number | "all";
+  keywords: Keyword[];
+  sortBy: "priority" | "newest" | "interaction" | "unread";
+  readFilter: "all" | "unread" | "read";
+  sourceFilter: string;
+  priorityFilter: "all" | "hot" | "watch" | "low";
+  hotspotSearch: string;
+  visibleCount: number;
+  totalCount: number;
+}) {
+  const keyword = keywordFilter === "all" ? "全部监控词" : keywords.find((item) => item.id === keywordFilter)?.term ?? "当前监控词";
+  const parts = [
+    keyword,
+    sortLabel(sortBy),
+    readLabel(readFilter),
+    priorityLabel(priorityFilter)
+  ];
+  if (sourceFilter) parts.push(`来源含「${sourceFilter}」`);
+  if (hotspotSearch) parts.push(`搜索「${hotspotSearch}」`);
+  return `${parts.join(" · ")}，显示 ${visibleCount}/${totalCount} 条`;
+}
+
+function sortLabel(value: "priority" | "newest" | "interaction" | "unread"): string {
+  if (value === "newest") return "最新发布";
+  if (value === "interaction") return "互动热度";
+  if (value === "unread") return "未读优先";
+  return "优先级排序";
+}
+
+function readLabel(value: "all" | "unread" | "read"): string {
+  if (value === "unread") return "仅未读";
+  if (value === "read") return "仅已读";
+  return "全部阅读状态";
+}
+
+function priorityLabel(value: "all" | "hot" | "watch" | "low"): string {
+  if (value === "hot") return "热门";
+  if (value === "watch") return "关注";
+  if (value === "low") return "低质";
+  return "全部重要程度";
 }
 
 function HotspotCard({ item, onOpenOriginal }: {
