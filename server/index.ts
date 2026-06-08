@@ -139,7 +139,9 @@ app.post("/api/scan", async (_req, res, next) => {
   }
 });
 
-serveFrontendInProduction();
+if (!process.env.VERCEL) {
+  serveFrontendInProduction();
+}
 
 app.use((req, res) => {
   res.status(404).json({ error: `Not found: ${req.path}` });
@@ -150,9 +152,13 @@ app.use((error: Error, _req: express.Request, res: express.Response, _next: expr
   res.status(500).json({ error: error.message });
 });
 
-app.listen(env.port, "127.0.0.1", () => {
-  console.log(`API listening on http://127.0.0.1:${env.port}`);
-});
+if (!process.env.VERCEL) {
+  app.listen(env.port, "127.0.0.1", () => {
+    console.log(`API listening on http://127.0.0.1:${env.port}`);
+  });
+}
+
+export default app;
 
 function getDashboard() {
   const items = repositories.items.list();

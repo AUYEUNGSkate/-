@@ -14,9 +14,12 @@ export interface EnvConfig {
 }
 
 export function getEnv(): EnvConfig {
+  const dbPath = process.env.VERCEL
+    ? "/tmp/hotpulse.sqlite"
+    : path.resolve(process.cwd(), process.env.DATABASE_PATH ?? "./data/hotspot-radar.sqlite");
   return {
     port: Number(process.env.PORT ?? 8787),
-    databasePath: path.resolve(process.cwd(), process.env.DATABASE_PATH ?? "./data/hotspot-radar.sqlite"),
+    databasePath: dbPath,
     scanIntervalMinutes: Number(process.env.SCAN_INTERVAL_MINUTES ?? 30),
     aiMode: process.env.AI_MODE === "mock" ? "mock" : "openrouter",
     openRouterApiKey: process.env.OPEN_ROUTER ?? process.env.OPENROUTER_API_KEY ?? "",
