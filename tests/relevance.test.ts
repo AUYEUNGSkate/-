@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildFeedUrl } from "../server/services/collector";
+import { buildFeedUrl, isGameKeyword } from "../server/services/collector";
 import { computeKeywordRelevance } from "../server/services/ai";
 import type { Keyword } from "../shared/types";
 
@@ -40,5 +40,24 @@ describe("relevance pipeline", () => {
   it("handles empty keyword gracefully", () => {
     const score = computeKeywordRelevance("Some Title", "", "");
     expect(score).toBe(50);
+  });
+});
+
+describe("isGameKeyword", () => {
+  const makeKeyword = (term: string, scope = ""): Keyword => ({
+    id: 1, term, scope, enabled: true, accountMode: false,
+    createdAt: "", accountPlatform: "", accountUid: "", accountUrl: ""
+  });
+
+  it("detects game keywords", () => {
+    expect(isGameKeyword(makeKeyword("游戏出海"))).toBe(true);
+    expect(isGameKeyword(makeKeyword("Unity 教程"))).toBe(true);
+    expect(isGameKeyword(makeKeyword("vibe coding", "游戏开发"))).toBe(true);
+  });
+
+  it("rejects non-game keywords", () => {
+    expect(isGameKeyword(makeKeyword("vibe coding"))).toBe(false);
+    expect(isGameKeyword(makeKeyword("AI 编程"))).toBe(false);
+    expect(isGameKeyword(makeKeyword("前端开发"))).toBe(false);
   });
 });

@@ -35,10 +35,22 @@ const parser = new XMLParser({
   trimValues: true
 });
 
+const GAME_TERMS = ["游戏", "电竞", "手游", "主机", "PS5", "Switch", "Steam", "原神", "米哈游", "腾讯", "网易", "3A", "赛博", "黑神话", "虚幻", "Unity", "育碧", "暴雪", "R星"];
+
+export function isGameKeyword(keyword: Keyword): boolean {
+  const haystack = `${keyword.term} ${keyword.scope}`.toLowerCase();
+  return GAME_TERMS.some((gt) => haystack.includes(gt.toLowerCase()));
+}
+
+const GAME_MEDIA_SOURCES = new Set(["机核网", "游研社", "触乐"]);
+
 export async function collectFromSources(keywords: Keyword[], sources: Source[]): Promise<CollectedItem[]> {
   const results: CollectedItem[] = [];
   for (const keyword of keywords) {
+    const isGame = isGameKeyword(keyword);
     for (const source of sources) {
+      // 非游戏关键词跳过游戏媒体 RSS 源
+      if (!isGame && GAME_MEDIA_SOURCES.has(source.name)) continue;
       try {
         results.push(...await collectFromSource(keyword, source));
       } catch (error) {
