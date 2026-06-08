@@ -26,6 +26,11 @@ export interface CollectedItem {
   interactionViews: number;
   summarySource: "ai" | "rss" | "metadata" | "title";
   interactionSource: "bilibili" | "zhihu" | "wechat" | "weibo" | "html" | "rss" | "none";
+  authorName?: string | null;
+  authorFollowers?: number;
+  authorVerified?: boolean;
+  interactionDanmaku?: number;
+  interactionQuotes?: number;
 }
 
 const parser = new XMLParser({

@@ -49,10 +49,26 @@ export async function runScan() {
       scoredItems.push({ id: itemId, priorityScore, freshnessScore });
     }
 
+    // Step 3b: Pull in top existing items for evaluation refresh (new prompt)
+    const existingTop = repositories.items.list(50)
+      .filter((i) => i.evaluation !== null && !insertedIds.includes(i.id))
+      .slice(0, 8);
+    for (const item of existingTop) {
+      scoredItems.push({
+        id: item.id,
+        priorityScore: item.priorityScore,
+        freshnessScore: item.freshnessScore
+      });
+    }
+
     // Step 4: Sort by priority, pick top 15 for AI evaluation
     scoredItems.sort((a, b) => b.priorityScore - a.priorityScore);
-    const aiCount = Math.min(15, scoredItems.length);
-    const aiCandidates = scoredItems.slice(0, aiCount);
+    const seenIds = new Set<number>();
+    const aiCandidates = scoredItems.filter((s) => {
+      if (seenIds.has(s.id)) return false;
+      seenIds.add(s.id);
+      return true;
+    }).slice(0, 15);
 
     for (const candidate of aiCandidates) {
       const item = repositories.items.byId(candidate.id);

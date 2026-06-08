@@ -196,7 +196,13 @@ async function evaluateWithOpenRouter(
         {
           role: "system",
           content:
-            "你是游戏行业情报分析员。请判断内容是否是真正值得关注的游戏行业或技术热点，警惕标题党、冒名、旧闻重复和低可信爆料。只输出符合 JSON Schema 的结果。"
+            "你是游戏行业情报分析员。请判断内容是否是真正值得关注的游戏行业或技术热点。"
+            + " isImpersonationLikely 仅当内容**故意冒充**游戏公司/产品/知名人物的官方身份发布虚假信息时才标记为 true。"
+            + " 判断冒名的严格原则："
+            + " (1) 必须是内容本身自称官方（如'米哈游官方公告''任天堂宣布'），且来源明显非官方渠道；"
+            + " (2) 第三方报道、RSS 聚合转载、引用官方声明、提及游戏名称均不属于冒名；"
+            + " (3) 宁可漏判，不可误判。只在有明确证据时才标记。"
+            + " 只输出符合 JSON Schema 的结果。"
         },
         {
           role: "user",
@@ -266,12 +272,17 @@ function mockEvaluation(
 }
 
 function sanitizeEvaluation(input: AiEvaluation): AiEvaluation {
+  const credibilityScore = clamp(input.credibilityScore);
+  const isImpersonationLikely = Boolean(input.isImpersonationLikely)
+    // Guard: 高可信度 + 高质量分不太可能同时是冒充，降低误判
+    && !(credibilityScore >= 75 && clamp(Math.max(input.relevanceScore, input.noveltyScore)) >= 70);
+
   return {
     relevanceScore: clamp(input.relevanceScore),
-    credibilityScore: clamp(input.credibilityScore),
+    credibilityScore,
     noveltyScore: clamp(input.noveltyScore),
     hotnessScore: clamp(input.hotnessScore),
-    isImpersonationLikely: Boolean(input.isImpersonationLikely),
+    isImpersonationLikely,
     summary: cleanSummary(String(input.summary ?? "")).slice(0, 300),
     reason: String(input.reason ?? "").slice(0, 600),
     recommendedAction: ["notify", "watch", "ignore"].includes(input.recommendedAction) ? input.recommendedAction : "watch"

@@ -5,6 +5,7 @@ import {
   ChevronDown,
   CircleOff,
   Eye,
+  Flame,
   Gauge,
   Loader2,
   Plus,
@@ -18,7 +19,7 @@ import {
   Zap
 } from "lucide-react";
 import type { AiMode, DashboardPayload, HotspotItem, Keyword, Source } from "../../shared/types";
-import { api, formatDate } from "../api-client/client";
+import { api, formatDate, relativeTime } from "../api-client/client";
 
 type ViewKey = "hotspots" | "monitor" | "sources";
 
@@ -30,6 +31,7 @@ export function App() {
   const [readFilter, setReadFilter] = useState<"all" | "unread" | "read">("all");
   const [sourceFilter, setSourceFilter] = useState("");
   const [priorityFilter, setPriorityFilter] = useState<"all" | "hot" | "watch" | "low">("all");
+  const [hotspotSearch, setHotspotSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
   const [error, setError] = useState("");
@@ -73,13 +75,22 @@ export function App() {
     if (priorityFilter === "hot") result = result.filter((item) => item.priorityScore >= 75);
     else if (priorityFilter === "watch") result = result.filter((item) => item.priorityScore >= 50 && item.priorityScore < 75);
     else if (priorityFilter === "low") result = result.filter((item) => item.priorityScore < 50);
+    // Hotspot keyword search (title / summary / keyword)
+    if (hotspotSearch) {
+      const q = hotspotSearch.toLowerCase();
+      result = result.filter((item) =>
+        item.title.toLowerCase().includes(q) ||
+        item.summary.toLowerCase().includes(q) ||
+        item.matchedKeyword.toLowerCase().includes(q)
+      );
+    }
     // Sort
     if (sortBy === "newest") result = [...result].sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
     else if (sortBy === "interaction") result = [...result].sort((a, b) => (b.interactionViews + b.interactionLikes) - (a.interactionViews + a.interactionLikes));
     else if (sortBy === "unread") result = [...result].sort((a, b) => (a.readAt ? 1 : 0) - (b.readAt ? 1 : 0) || new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
     else result = [...result].sort((a, b) => b.priorityScore - a.priorityScore);
     return result;
-  }, [dashboard, keywordFilter, sortBy, readFilter, sourceFilter, priorityFilter]);
+  }, [dashboard, keywordFilter, sortBy, readFilter, sourceFilter, priorityFilter, hotspotSearch]);
   const unreadItems = useMemo(() => getUnreadItems(dashboard?.items ?? []), [dashboard]);
   const unreadCount = unreadItems.length;
   const todayAdded = useMemo(() => getTodayAddedCount(dashboard?.items ?? []), [dashboard]);
@@ -271,6 +282,8 @@ export function App() {
             priorityFilter={priorityFilter}
             onSourceFilter={setSourceFilter}
             onPriorityFilter={setPriorityFilter}
+            hotspotSearch={hotspotSearch}
+            onHotspotSearchChange={setHotspotSearch}
             showArchived={showArchived}
             archivedItems={archivedItems}
             selectedArchivedIds={selectedArchivedIds}
@@ -452,6 +465,8 @@ function HotspotView({
   priorityFilter,
   onSourceFilter,
   onPriorityFilter,
+  hotspotSearch,
+  onHotspotSearchChange,
   showArchived,
   archivedItems,
   selectedArchivedIds,
@@ -477,6 +492,8 @@ function HotspotView({
   priorityFilter: "all" | "hot" | "watch" | "low";
   onSourceFilter: (value: string) => void;
   onPriorityFilter: (value: "all" | "hot" | "watch" | "low") => void;
+  hotspotSearch: string;
+  onHotspotSearchChange: (value: string) => void;
   showArchived: boolean;
   archivedItems: HotspotItem[];
   selectedArchivedIds: Set<number>;
@@ -520,6 +537,24 @@ function HotspotView({
       <SummaryPanel items={allItems} />
 
       <div className="sort-filter-bar">
+        <div className="hotspot-search-bar">
+          <Search className="size-4" />
+          <input
+            type="text"
+            placeholder="搜索热点标题、内容..."
+            value={hotspotSearch}
+            onChange={(e) => onHotspotSearchChange(e.target.value)}
+          />
+          {hotspotSearch ? (
+            <button
+              className="hotspot-search-clear"
+              onClick={() => onHotspotSearchChange("")}
+              title="清除搜索"
+            >
+              ×
+            </button>
+          ) : null}
+        </div>
         <FilterDropdown
           label="排序"
           value={sortBy}
@@ -613,7 +648,13 @@ function HotspotView({
             {items.length === 0 ? (
               <EmptyState title="暂无候选内容" body="当前筛选下没有新的有效资讯。" />
             ) : (
-              items.map((item) => <HotspotCard key={item.id} item={item} onOpenOriginal={onOpenOriginal} />)
+              items.map((item) => (
+                <HotspotCard
+                  key={item.id}
+                  item={item}
+                  onOpenOriginal={onOpenOriginal}
+                />
+              ))
             )}
           </div>
         )}
@@ -622,29 +663,57 @@ function HotspotView({
   );
 }
 
-function HotspotCard({ item, onOpenOriginal }: { item: HotspotItem; onOpenOriginal: (item: HotspotItem) => void }) {
+function HotspotCard({ item, onOpenOriginal }: {
+  item: HotspotItem;
+  onOpenOriginal: (item: HotspotItem) => void;
+}) {
   const unread = item.status === "new" && !item.readAt;
   const priority = getPriority(item);
   const interaction = formatInteraction(item);
+  const hotness = computeHotnessScore(item);
+  const hotnessColor = hotness >= 80 ? "#f87171" : hotness >= 65 ? "#facc15" : "#60a5fa";
 
   return (
     <article className={unread ? "signal-item unread" : "signal-item"}>
       <div className="signal-card-top">
-        <div className={`priority-badge ${priority.tone}`}>
-          <Zap className="size-3" />
-          {priority.label}
+        <div className="signal-badges">
+          <div className={`priority-badge ${priority.tone}`}>
+            <Zap className="size-3" />
+            {priority.label}
+          </div>
+          <div className="hotness-indicator" style={{ color: hotnessColor }}>
+            <Flame className="size-3" />
+            {Math.round(hotness)}
+          </div>
         </div>
-        {!unread && item.readAt ? (
-          <span className="read-badge">
-            <CheckCircle2 className="size-3" />
-            已读
-          </span>
-        ) : null}
       </div>
       <div className="signal-copy">
         <div className="signal-source">
           <span>{item.matchedKeyword}</span>
           <span>{getItemSourceLabel(item)}</span>
+          {item.sourceReliability ? (
+            <span className={`reliability-tag reliability-${item.sourceReliability}`}>
+              {reliabilityLabel(item.sourceReliability)}
+            </span>
+          ) : null}
+          {item.authorName ? (
+            <span className="author-tag">
+              {item.authorVerified ? (
+                <span className="author-verified-mark">V</span>
+              ) : null}
+              {item.authorName}
+              {item.authorFollowers > 0 ? (
+                <span className="author-followers">{formatNumber(item.authorFollowers)}粉</span>
+              ) : null}
+            </span>
+          ) : null}
+          <span
+            className="read-badge"
+            style={{ visibility: (!unread && item.readAt) ? "visible" : "hidden", marginLeft: "auto" }}
+          >
+            <CheckCircle2 className="size-3" />
+            已读
+          </span>
         </div>
         <h3>
           <a
@@ -663,12 +732,19 @@ function HotspotCard({ item, onOpenOriginal }: { item: HotspotItem; onOpenOrigin
         <p>{displaySummary(item)}</p>
         <div className="signal-meta">
           <span>优先 {item.priorityScore}</span>
-          <span>{formatDate(item.publishedAt)}</span>
+          <span title={formatDate(item.publishedAt)}>发布 {relativeTime(item.publishedAt)}</span>
+          <span className="signal-fetched" title={formatDate(item.fetchedAt)}>抓取 {relativeTime(item.fetchedAt)}</span>
           {interaction ? <span>{interaction}</span> : null}
         </div>
       </div>
     </article>
   );
+}
+
+function computeHotnessScore(item: HotspotItem): number {
+  const h = item.evaluation?.hotnessScore ?? 0;
+  const interaction = Math.log10(item.interactionViews + item.interactionLikes + 1) * 20;
+  return Math.round(h * 0.4 + Math.min(100, interaction) * 0.6);
 }
 
 function MonitorView(props: {
@@ -951,6 +1027,8 @@ function formatInteraction(item: HotspotItem): string {
   if (item.interactionReposts > 0) parts.push(`${formatNumber(item.interactionReposts)}转发`);
   if (item.interactionReplies > 0) parts.push(`${formatNumber(item.interactionReplies)}回复`);
   if (item.interactionViews > 0) parts.push(`${formatNumber(item.interactionViews)}浏览`);
+  if (item.interactionDanmaku > 0) parts.push(`${formatNumber(item.interactionDanmaku)}弹幕`);
+  if (item.interactionQuotes > 0) parts.push(`${formatNumber(item.interactionQuotes)}引用`);
   if (parts.length > 0) return parts.join(" · ");
 
   return expectsVideoInteraction(item) ? "暂无互动数据" : "";

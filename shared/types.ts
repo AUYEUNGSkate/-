@@ -61,6 +61,11 @@ export interface HotspotItem {
   interactionSource: InteractionSource;
   priorityScore: number;
   freshnessScore: number;
+  authorName: string | null;
+  authorFollowers: number;
+  authorVerified: boolean;
+  interactionDanmaku: number;
+  interactionQuotes: number;
 }
 
 export interface AiEvaluation {

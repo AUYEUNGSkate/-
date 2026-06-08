@@ -27,6 +27,11 @@ export interface RawItemInput {
   interactionViews: number;
   summarySource?: SummarySource;
   interactionSource?: InteractionSource;
+  authorName?: string | null;
+  authorFollowers?: number;
+  authorVerified?: boolean;
+  interactionDanmaku?: number;
+  interactionQuotes?: number;
 }
 
 export interface SourceInput {
@@ -169,6 +174,11 @@ function initializeSchema(db: Database.Database) {
   addColumnIfMissing(db, "items", "interaction_source", "TEXT NOT NULL DEFAULT 'none'");
   addColumnIfMissing(db, "items", "priority_score", "INTEGER NOT NULL DEFAULT 0");
   addColumnIfMissing(db, "items", "freshness_score", "INTEGER NOT NULL DEFAULT 0");
+  addColumnIfMissing(db, "items", "author_name", "TEXT");
+  addColumnIfMissing(db, "items", "author_followers", "INTEGER NOT NULL DEFAULT 0");
+  addColumnIfMissing(db, "items", "author_verified", "INTEGER NOT NULL DEFAULT 0");
+  addColumnIfMissing(db, "items", "interaction_danmaku", "INTEGER NOT NULL DEFAULT 0");
+  addColumnIfMissing(db, "items", "interaction_quotes", "INTEGER NOT NULL DEFAULT 0");
   addColumnIfMissing(db, "keywords", "account_mode", "INTEGER NOT NULL DEFAULT 0");
   addColumnIfMissing(db, "keywords", "account_platform", "TEXT NOT NULL DEFAULT ''");
   addColumnIfMissing(db, "keywords", "account_uid", "TEXT NOT NULL DEFAULT ''");
@@ -646,8 +656,13 @@ export const repositories = {
           i.interaction_reposts,
           i.interaction_replies,
           i.interaction_views,
+          i.interaction_danmaku,
+          i.interaction_quotes,
           i.priority_score,
           i.freshness_score,
+          i.author_name,
+          i.author_followers,
+          i.author_verified,
           s.reliability_tier AS source_reliability,
           s.community_source AS source_community,
           e.relevance_score,
@@ -690,6 +705,11 @@ export const repositories = {
         i.interaction_reposts,
         i.interaction_replies,
         i.interaction_views,
+        i.interaction_danmaku,
+        i.interaction_quotes,
+        i.author_name,
+        i.author_followers,
+        i.author_verified,
         s.reliability_tier AS source_reliability,
         s.community_source AS source_community,
         e.relevance_score,
@@ -790,19 +810,28 @@ export const repositories = {
             published_at, fetched_at, matched_keyword, status,
             quality_score, quality_signals, evidence_count,
             interaction_likes, interaction_reposts, interaction_replies, interaction_views,
-            summary_source, interaction_source
+            interaction_danmaku, interaction_quotes,
+            summary_source, interaction_source,
+            author_name, author_followers, author_verified
           ) VALUES (
             @sourceId, @keywordId, @title, @url, @normalizedUrl, @summary,
             @publishedAt, @fetchedAt, @matchedKeyword, 'watch',
             @qualityScore, @qualitySignalsJson, 1,
             @interactionLikes, @interactionReposts, @interactionReplies, @interactionViews,
-            @summarySource, @interactionSource
+            @interactionDanmaku, @interactionQuotes,
+            @summarySource, @interactionSource,
+            @authorName, @authorFollowers, @authorVerified
           )
         `).run({
           ...input,
           qualitySignalsJson: JSON.stringify(input.qualitySignals),
           summarySource: input.summarySource ?? "rss",
-          interactionSource: input.interactionSource ?? "none"
+          interactionSource: input.interactionSource ?? "none",
+          interactionDanmaku: input.interactionDanmaku ?? 0,
+          interactionQuotes: input.interactionQuotes ?? 0,
+          authorName: input.authorName ?? null,
+          authorFollowers: input.authorFollowers ?? 0,
+          authorVerified: input.authorVerified ? 1 : 0
         });
         const itemId = Number(info.lastInsertRowid);
         mergeItemEvidence(db, itemId, input);
@@ -932,10 +961,15 @@ interface ItemJoinedRow {
   interaction_reposts: number;
   interaction_replies: number;
   interaction_views: number;
+  interaction_danmaku: number;
+  interaction_quotes: number;
   summary_source: string;
   interaction_source: string;
   priority_score: number;
   freshness_score: number;
+  author_name: string | null;
+  author_followers: number;
+  author_verified: number;
   source_reliability: ReliabilityTier | null;
   source_community: number | null;
   relevance_score: number | null;
@@ -1018,10 +1052,15 @@ function mapItem(row: ItemJoinedRow): HotspotItem {
     interactionReposts: row.interaction_reposts ?? 0,
     interactionReplies: row.interaction_replies ?? 0,
     interactionViews: row.interaction_views ?? 0,
+    interactionDanmaku: row.interaction_danmaku ?? 0,
+    interactionQuotes: row.interaction_quotes ?? 0,
     summarySource: parseSummarySource(row.summary_source),
     interactionSource: parseInteractionSource(row.interaction_source),
     priorityScore: row.priority_score ?? 0,
     freshnessScore: row.freshness_score ?? 0,
+    authorName: row.author_name ?? null,
+    authorFollowers: row.author_followers ?? 0,
+    authorVerified: Boolean(row.author_verified),
     evaluation: row.relevance_score === null ? null : {
       relevanceScore: row.relevance_score,
       credibilityScore: row.credibility_score ?? 0,

@@ -13,6 +13,11 @@ export interface EnrichmentResult {
   interactionReplies?: number;
   interactionViews?: number;
   interactionSource?: InteractionSource;
+  authorName?: string | null;
+  authorFollowers?: number;
+  authorVerified?: boolean;
+  interactionDanmaku?: number;
+  interactionQuotes?: number;
 }
 
 const GAME_SITE_HOSTS = [
@@ -43,7 +48,12 @@ export async function enrichCollectedItem(item: CollectedItem): Promise<Collecte
       interactionReposts: result?.interactionReposts ?? item.interactionReposts,
       interactionReplies: result?.interactionReplies ?? item.interactionReplies,
       interactionViews: result?.interactionViews ?? item.interactionViews,
-      interactionSource: result?.interactionSource ?? item.interactionSource
+      interactionSource: result?.interactionSource ?? item.interactionSource,
+      authorName: result?.authorName ?? item.authorName,
+      authorFollowers: result?.authorFollowers ?? item.authorFollowers,
+      authorVerified: result?.authorVerified ?? item.authorVerified,
+      interactionDanmaku: result?.interactionDanmaku ?? item.interactionDanmaku,
+      interactionQuotes: result?.interactionQuotes ?? item.interactionQuotes
     };
   } catch {
     return item;
@@ -120,7 +130,11 @@ export async function enrichBilibiliVideo(input: { bvid?: string; aid?: string }
     interactionReposts: data.stat?.share ?? 0,
     interactionReplies: data.stat?.reply ?? 0,
     interactionViews: data.stat?.view ?? 0,
-    interactionSource: "bilibili"
+    interactionDanmaku: data.stat?.danmaku ?? 0,
+    interactionSource: "bilibili",
+    authorName: data.owner?.name ?? null,
+    authorFollowers: data.owner?.follower ?? 0,
+    authorVerified: data.owner?.official_verify?.type === 0
   };
 }
 
@@ -144,8 +158,16 @@ export async function enrichZhihu(url: string): Promise<EnrichmentResult | null>
     interactionLikes: likesMatch ? parseInt(likesMatch[1].replace(/[,，]/g, ""), 10) : 0,
     interactionReplies: repliesMatch ? parseInt(repliesMatch[1].replace(/[,，]/g, ""), 10) : 0,
     interactionViews: viewsMatch ? parseInt(viewsMatch[1].replace(/[,，]/g, ""), 10) : 0,
-    interactionSource: "zhihu"
+    interactionSource: "zhihu",
+    authorName: extractZhihuAuthor(html)
   };
+}
+
+function extractZhihuAuthor(html: string): string | null {
+  const m = html.match(/class="[^"]*AuthorInfo[^"]*"[^>]*>[\s\S]*?class="[^"]*UserLink[^"]*"[^>]*>([^<]+)</i)
+    ?? html.match(/"author"\s*:\s*\{[^}]*"name"\s*:\s*"([^"]+)"/i)
+    ?? html.match(/<meta[^>]+itemprop="name"[^>]+content="([^"]+)"/i);
+  return m?.[1]?.trim() ?? null;
 }
 
 export async function enrichWechatMp(url: string, existingHtml = ""): Promise<EnrichmentResult | null> {
@@ -167,8 +189,16 @@ export async function enrichWechatMp(url: string, existingHtml = ""): Promise<En
     summarySource: "metadata",
     interactionLikes: likesMatch ? parseInt(likesMatch[1].replace(/[,，]/g, ""), 10) : 0,
     interactionViews: viewsMatch ? parseInt(viewsMatch[1].replace(/[,，]/g, ""), 10) : 0,
-    interactionSource: "wechat"
+    interactionSource: "wechat",
+    authorName: extractWechatAuthor(html)
   };
+}
+
+function extractWechatAuthor(html: string): string | null {
+  const m = html.match(/class="[^"]*rich_media_meta_text[^"]*"[^>]*>([^<]+)</i)
+    ?? html.match(/var\s+nickname\s*=\s*"([^"]+)"/i)
+    ?? html.match(/"nickname"\s*:\s*"([^"]+)"/i);
+  return m?.[1]?.trim() ?? null;
 }
 
 export async function enrichHtmlMetadata(url: string, existingHtml = ""): Promise<EnrichmentResult | null> {
@@ -186,7 +216,8 @@ export async function enrichHtmlMetadata(url: string, existingHtml = ""): Promis
     interactionReposts: counts.reposts,
     interactionReplies: counts.replies,
     interactionViews: counts.views,
-    interactionSource: hasAnyCount(counts) ? "html" : "none"
+    interactionSource: hasAnyCount(counts) ? "html" : "none",
+    authorName: metaContent(html, "author") || null
   };
 }
 
@@ -369,6 +400,17 @@ interface BilibiliViewResponse {
       like?: number;
       reply?: number;
       share?: number;
+      danmaku?: number;
+    };
+    owner?: {
+      name?: string;
+      face?: string;
+      mid?: number;
+      follower?: number;
+      official_verify?: {
+        type?: number;
+        desc?: string;
+      };
     };
   };
 }
