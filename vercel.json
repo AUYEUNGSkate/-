@@ -1,6 +1,7 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "installCommand": "npm install",
   "routes": [
     {
       "src": "/api/(.*)",
@@ -12,7 +13,7 @@
     }
   ],
   "functions": {
-    "api/index.ts": {
+    "api/index.js": {
       "memory": 512,
       "maxDuration": 30
     }
