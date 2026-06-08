@@ -104,4 +104,36 @@ describe("repositories", () => {
     expect(sources.find((source) => source.name === "B站账号视频")?.enabled).toBe(true);
     expect(sources.filter((source) => source.providerType === "google_news").every((source) => source.enabled === false)).toBe(true);
   });
+
+  it("preserves platform-specific interaction sources", async () => {
+    const loaded = await loadRepo();
+    tempDir = loaded.tempDir;
+    const { repositories } = loaded;
+    const keyword = repositories.keywords.create("Unity", "游戏");
+    const source = repositories.sources.create({ name: "微博热搜", url: "https://weibo.com/ajax/side/hotSearch", category: "测试", providerType: "weibo_hot" });
+
+    repositories.items.insert({
+      sourceId: source.id,
+      keywordId: keyword.id,
+      providerType: "weibo_hot",
+      title: "Unity 微博热搜",
+      url: "https://s.weibo.com/weibo?q=Unity",
+      normalizedUrl: "https://s.weibo.com/weibo?q=Unity",
+      summary: "微博热搜 #1",
+      publishedAt: new Date().toISOString(),
+      fetchedAt: new Date().toISOString(),
+      matchedKeyword: keyword.term,
+      query: keyword.term,
+      rank: 1,
+      qualityScore: 90,
+      qualitySignals: ["基础质量通过"],
+      interactionLikes: 0,
+      interactionReposts: 0,
+      interactionReplies: 0,
+      interactionViews: 120000,
+      interactionSource: "weibo"
+    });
+
+    expect(repositories.items.list()[0].interactionSource).toBe("weibo");
+  });
 });

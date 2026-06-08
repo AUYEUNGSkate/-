@@ -39,6 +39,8 @@ const RESPONSE_FORMAT = {
   }
 };
 
+const loggedOpenRouterFallbacks = new Set<string>();
+
 export function computeFreshnessScore(publishedAt: string): number {
   const ageMs = Date.now() - new Date(publishedAt).getTime();
   if (Number.isNaN(ageMs)) return 50;
@@ -157,7 +159,7 @@ export async function evaluateItem(
   try {
     return await evaluateWithOpenRouter(item, keyword, source);
   } catch (error) {
-    console.warn("[ai] OpenRouter failed, using mock fallback:", error instanceof Error ? error.message : error);
+    logOpenRouterFallback(error);
     return mockEvaluation(item, keyword, source);
   }
 }
@@ -247,7 +249,7 @@ relevanceScore 严格按如下标准：
   });
 
   if (!response.ok) {
-    throw new Error(`OpenRouter HTTP ${response.status}: ${await response.text()}`);
+    throw new Error(`OpenRouter HTTP ${response.status}: ${summarizeOpenRouterError(await response.text())}`);
   }
   const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
   const content = data.choices?.[0]?.message?.content;
@@ -336,4 +338,22 @@ export function computeFinalRelevance(item: Pick<HotspotItem, "title" | "summary
 
 function clamp(value: number): number {
   return Math.max(0, Math.min(100, Number(value) || 0));
+}
+
+function logOpenRouterFallback(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  if (loggedOpenRouterFallbacks.has(message)) return;
+  loggedOpenRouterFallbacks.add(message);
+  console.warn(`[ai] OpenRouter unavailable, using mock fallback: ${message}`);
+}
+
+function summarizeOpenRouterError(text: string): string {
+  try {
+    const payload = JSON.parse(text) as { error?: { message?: string; code?: number | string } };
+    const code = payload.error?.code ? `code ${payload.error.code}` : "request failed";
+    const message = payload.error?.message ?? "unknown error";
+    return `${code} - ${message}`;
+  } catch {
+    return text.slice(0, 240);
+  }
 }

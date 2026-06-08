@@ -51,6 +51,7 @@ const GAME_MEDIA_SOURCES = new Set(["机核网", "游研社", "触乐"]);
 
 export async function collectFromSources(keywords: Keyword[], sources: Source[]): Promise<CollectedItem[]> {
   const results: CollectedItem[] = [];
+  const failures = new Map<string, { count: number; messages: Set<string> }>();
   for (const keyword of keywords) {
     const isGame = isGameKeyword(keyword);
     for (const source of sources) {
@@ -59,9 +60,22 @@ export async function collectFromSources(keywords: Keyword[], sources: Source[])
       try {
         results.push(...await collectFromSource(keyword, source));
       } catch (error) {
-        console.warn(`[collector] ${source.name} failed:`, error instanceof Error ? error.message : error);
+        const key = `${source.name} (${source.providerType})`;
+        const current = failures.get(key) ?? { count: 0, messages: new Set<string>() };
+        current.count += 1;
+        current.messages.add(error instanceof Error ? error.message : String(error));
+        failures.set(key, current);
       }
     }
+  }
+  if (failures.size > 0) {
+    const summary = Array.from(failures.entries())
+      .map(([name, failure]) => {
+        const messages = Array.from(failure.messages).slice(0, 2).join("; ");
+        return `${name} x${failure.count}: ${messages}`;
+      })
+      .join(" | ");
+    console.warn(`[collector] source failures: ${summary}`);
   }
   return results;
 }
@@ -381,6 +395,7 @@ function normalizeSearchResult(
   const title = result.title ?? "";
   const url = result.url ?? "";
   if (!title || !url) return null;
+  if (!/^https?:\/\//i.test(url)) return null;
   const summary = cleanSummary(result.description ?? "");
   const quality = assessContentQuality({ title, url, summary, sourceName: source.name, sourceCommunity: source.communitySource });
   if (quality.lowQuality) return null;

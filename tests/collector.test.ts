@@ -96,4 +96,25 @@ describe("collector", () => {
     expect(items[0].providerType).toBe("brave_search");
     expect(items[0].normalizedUrl).toBe("https://example.com/unity-ai");
   });
+
+  it("skips malformed Brave Search result urls", async () => {
+    process.env.BRAVE_SEARCH_API_KEY = "test-key";
+    vi.stubGlobal("fetch", vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        web: {
+          results: [
+            {
+              title: "Unity malformed result",
+              url: "%E6%B8%B8%E6%88%8F",
+              description: "Not a navigable URL",
+              age: "2026-06-05T10:00:00Z"
+            }
+          ]
+        }
+      })
+    })));
+    const braveSource: Source = { ...source, providerType: "brave_search" };
+    await expect(collectFromBraveSearch(keyword, braveSource)).resolves.toEqual([]);
+  });
 });

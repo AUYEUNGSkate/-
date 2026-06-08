@@ -1111,7 +1111,14 @@ function parseSummarySource(value: string): SummarySource {
 }
 
 function parseInteractionSource(value: string): InteractionSource {
-  if (value === "bilibili" || value === "html" || value === "rss") return value;
+  if (
+    value === "bilibili" ||
+    value === "zhihu" ||
+    value === "wechat" ||
+    value === "weibo" ||
+    value === "html" ||
+    value === "rss"
+  ) return value;
   return "none";
 }
 

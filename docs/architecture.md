@@ -7,7 +7,7 @@
 - 前端：React + Vite + TypeScript + TailwindCSS
 - 后端：Node.js + Express + TypeScript
 - 数据库：SQLite + better-sqlite3
-- 定时任务：Node worker + node-cron
+- 定时任务：Node worker + 原生分钟级定时器
 - RSS/XML 解析：fast-xml-parser
 - AI：OpenRouter Chat Completions + JSON Schema
 
@@ -21,7 +21,7 @@
 | 样式 | TailwindCSS v4 + `@tailwindcss/vite` | 当前推荐 Vite 插件接入，响应式和定制视觉效率高 |
 | 图标 | lucide-react | 轻量、统一、适合按钮和状态标识 |
 | 后端 API | Express + TypeScript | 简单直接，适合轻量 API 和本机服务 |
-| 后台任务 | node-cron | 支持 cron 调度、任务生命周期控制和 no-overlap |
+| 后台任务 | Node worker + `setInterval` | 支持 5-1440 分钟间隔，避免 cron 步进在 60 分钟以上失效；并发保护由扫描器内部锁完成 |
 | 数据库 | SQLite + better-sqlite3 | 本地文件数据库，无需外部服务，prepared statement 简洁 |
 | RSS/XML | fast-xml-parser | 当前文档可查，直接解析 RSS/Atom XML，避免文档缺失库 |
 | AI | OpenRouter | OpenAI-compatible API，支持 Bearer 鉴权和结构化输出 |
@@ -44,7 +44,6 @@
 | Express | `/expressjs/express` |
 | TailwindCSS | `/tailwindlabs/tailwindcss.com` |
 | better-sqlite3 | `/wiselibs/better-sqlite3` |
-| node-cron | `/websites/nodecron` |
 | fast-xml-parser | `/naturalintelligence/fast-xml-parser` |
 
 ## 数据流

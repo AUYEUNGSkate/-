@@ -9,6 +9,8 @@
   --radar-panel-strong: #111a30;
   --radar-ink: #f8fafc;
   --radar-muted: #7b8498;
+  --radar-text: var(--radar-ink);
+  --radar-text-secondary: var(--radar-muted);
   --radar-line: rgba(148, 163, 184, 0.13);
   --radar-line-strong: rgba(96, 165, 250, 0.34);
   --radar-accent: #38bdf8;
@@ -884,6 +886,49 @@ button:disabled {
   font-size: 13px;
   line-height: 1.55;
   overflow-wrap: anywhere;
+}
+
+.ai-reason-block {
+  margin-top: 10px;
+  padding: 10px 12px 10px 13px;
+  border: 1px solid rgba(56, 189, 248, 0.16);
+  border-left: 2px solid rgba(56, 189, 248, 0.72);
+  border-radius: 8px;
+  background: linear-gradient(90deg, rgba(37, 99, 235, 0.12), rgba(56, 189, 248, 0.035));
+}
+
+.ai-reason-block p {
+  margin: 0;
+  color: #91a2bd;
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.ai-reason-block strong {
+  margin-right: 8px;
+  color: #60a5fa;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.ai-reason-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 8px;
+}
+
+.ai-reason-tags span {
+  min-height: 21px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 6px;
+  padding: 0 7px;
+  background: rgba(255, 255, 255, 0.045);
+  color: #8ea4c4;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10px;
 }
 
 .signal-meta {

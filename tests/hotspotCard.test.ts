@@ -105,6 +105,29 @@ function formatInteraction(item: HotspotItem): string {
   return "";
 }
 
+function cleanText(value: string): string {
+  return value
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getAiReasonText(item: HotspotItem): string {
+  if (!item.evaluation) return "";
+  return cleanText(item.evaluation.relevanceSummary || item.evaluation.reason || "");
+}
+
+function recommendedActionLabel(value: string): string {
+  if (value === "notify") return "通知";
+  if (value === "watch") return "关注";
+  if (value === "ignore") return "忽略";
+  return "关注";
+}
+
 // ── Expand/collapse logic tests ──
 
 function toggleExpand(expanded: Set<number>, itemId: number): Set<number> {
@@ -206,6 +229,38 @@ describe("HotspotCard utilities", () => {
     });
     it("returns empty when all zero", () => {
       expect(formatInteraction(makeItem({ interactionLikes: 0, interactionReposts: 0, interactionReplies: 0, interactionViews: 0 }))).toBe("");
+    });
+  });
+
+  describe("AI reason block utilities", () => {
+    it("prefers relevanceSummary over reason", () => {
+      const item = makeItem({
+        evaluation: makeEval({
+          relevanceSummary: "这是关联摘要",
+          reason: "这是完整理由"
+        })
+      });
+      expect(getAiReasonText(item)).toBe("这是关联摘要");
+    });
+
+    it("falls back to reason when relevanceSummary is empty", () => {
+      const item = makeItem({
+        evaluation: makeEval({
+          relevanceSummary: "",
+          reason: "这是完整理由"
+        })
+      });
+      expect(getAiReasonText(item)).toBe("这是完整理由");
+    });
+
+    it("returns empty when evaluation is null", () => {
+      expect(getAiReasonText(makeItem({ evaluation: null }))).toBe("");
+    });
+
+    it("translates recommended actions", () => {
+      expect(recommendedActionLabel("notify")).toBe("通知");
+      expect(recommendedActionLabel("watch")).toBe("关注");
+      expect(recommendedActionLabel("ignore")).toBe("忽略");
     });
   });
 });

@@ -44,7 +44,6 @@ export function App() {
   const [aiMode, setAiMode] = useState<AiMode>("openrouter");
   const [showArchived, setShowArchived] = useState(false);
   const [archivedItems, setArchivedItems] = useState<HotspotItem[]>([]);
-  const [briefing, setBriefing] = useState("");
   const [selectedArchivedIds, setSelectedArchivedIds] = useState<Set<number>>(new Set());
 
   useEffect(() => {
@@ -56,12 +55,6 @@ export function App() {
     setScanInterval(String(dashboard.settings.scanIntervalMinutes));
     setAiMode(dashboard.settings.aiMode);
   }, [dashboard]);
-
-  useEffect(() => {
-    if (dashboard && dashboard.items.length > 0) {
-      api.summary().then((s) => setBriefing(s.briefing)).catch(() => {});
-    }
-  }, [dashboard?.items.length]);
 
   const visibleItems = useMemo(() => {
     if (!dashboard) return [];
@@ -252,6 +245,7 @@ export function App() {
         scanning={scanning}
         onScan={runScan}
         onOpenHotspots={openHotspots}
+        onOpenOriginal={openOriginal}
         onChangeView={setActiveView}
       />
 
@@ -339,6 +333,7 @@ function TopNav({
   scanning,
   onScan,
   onOpenHotspots,
+  onOpenOriginal,
   onChangeView
 }: {
   activeView: ViewKey;
@@ -348,6 +343,7 @@ function TopNav({
   scanning: boolean;
   onScan: () => Promise<void>;
   onOpenHotspots: () => void;
+  onOpenOriginal: (item: HotspotItem) => void;
   onChangeView: (view: ViewKey) => void;
 }) {
   const tabs: Array<{ key: ViewKey; label: string; icon: ReactNode }> = [
@@ -399,7 +395,7 @@ function TopNav({
                   <p className="notify-empty">已全部读完</p>
                 ) : (
                   unreadItems.map((item) => (
-                    <button key={item.id} className="notify-item" onClick={() => onOpenHotspots()}>
+                    <button key={item.id} className="notify-item" onClick={() => onOpenOriginal(item)}>
                       <strong>{item.title}</strong>
                       <small>
                         {item.matchedKeyword} · {formatDate(item.publishedAt)}
@@ -730,6 +726,7 @@ function HotspotCard({ item, onOpenOriginal }: {
           </a>
         </h3>
         <p>{displaySummary(item)}</p>
+        <AiReasonBlock item={item} />
         <div className="signal-meta">
           <span>优先 {item.priorityScore}</span>
           <span title={formatDate(item.publishedAt)}>发布 {relativeTime(item.publishedAt)}</span>
@@ -738,6 +735,25 @@ function HotspotCard({ item, onOpenOriginal }: {
         </div>
       </div>
     </article>
+  );
+}
+
+function AiReasonBlock({ item }: { item: HotspotItem }) {
+  const reason = getAiReasonText(item);
+  if (!reason || !item.evaluation) return null;
+
+  return (
+    <section className="ai-reason-block" aria-label="AI 分析理由">
+      <p>
+        <strong>AI 分析</strong>
+        <span>此内容与【{item.matchedKeyword}】的关联：{reason}</span>
+      </p>
+      <div className="ai-reason-tags">
+        <span>相关性 {Math.round(item.evaluation.relevanceScore)}%</span>
+        <span>可信 {Math.round(item.evaluation.credibilityScore)}%</span>
+        <span>建议：{recommendedActionLabel(item.evaluation.recommendedAction)}</span>
+      </div>
+    </section>
   );
 }
 
@@ -915,6 +931,18 @@ function displaySummary(item: HotspotItem): string {
   return trimText(cleanText(raw), 120);
 }
 
+function getAiReasonText(item: HotspotItem): string {
+  if (!item.evaluation) return "";
+  return cleanText(item.evaluation.relevanceSummary || item.evaluation.reason || "");
+}
+
+function recommendedActionLabel(value: string): string {
+  if (value === "notify") return "通知";
+  if (value === "watch") return "关注";
+  if (value === "ignore") return "忽略";
+  return "关注";
+}
+
 function getVisibleItems(items: HotspotItem[], keywordFilter: number | "all"): HotspotItem[] {
   if (keywordFilter === "all") return items;
   return items.filter((item) => item.keywordId === keywordFilter);
@@ -959,6 +987,8 @@ function trimText(value: string, maxLength: number): string {
 function providerLabel(value: string): string {
   if (value === "google_news") return "Google News";
   if (value === "brave_search") return "Brave";
+  if (value === "bilibili_search") return "B站搜索";
+  if (value === "weibo_hot") return "微博热搜";
   return "RSS";
 }
 
