@@ -20,6 +20,8 @@ import {
 } from "lucide-react";
 import type { AiMode, DashboardPayload, HotspotItem, Keyword, Source } from "../../shared/types";
 import { api, formatDate, relativeTime } from "../api-client/client";
+import { HoverBorderGradient } from "../components/ui/hover-border-gradient";
+import { Spotlight } from "../components/ui/spotlight";
 
 type ViewKey = "hotspots" | "monitor" | "sources";
 
@@ -237,6 +239,7 @@ export function App() {
 
   return (
     <main className="radar-page">
+      <Spotlight className="radar-spotlight" fill="#38bdf8" />
       <TopNav
         activeView={activeView}
         unreadCount={unreadCount}
@@ -375,13 +378,26 @@ function TopNav({
         </nav>
 
         <div className="radar-nav-actions">
-          <button className="scan-button" onClick={() => void onScan()} disabled={scanning}>
+          <HoverBorderGradient
+            as="button"
+            className="scan-button"
+            containerClassName="scan-button-shell"
+            surfaceClassName="scan-button-surface"
+            duration={1.6}
+            onClick={() => void onScan()}
+            disabled={scanning}
+            aria-label={scanning ? "正在扫描热点" : "立即扫描热点"}
+          >
             {scanning ? <Loader2 className="size-4 animate-spin" /> : <RefreshCcw className="size-4" />}
             立即扫描
-          </button>
+          </HoverBorderGradient>
 
           <div className="notify-wrap">
-            <button className={unreadCount > 0 ? "notify-button active" : "notify-button"} onClick={() => onOpenHotspots()}>
+            <button
+              className={unreadCount > 0 ? "notify-button active" : "notify-button"}
+              onClick={() => onOpenHotspots()}
+              aria-label={`未读热点 ${unreadCount} 条`}
+            >
               <BellDot className="size-4" />
               <span>{unreadCount}</span>
             </button>
@@ -406,7 +422,7 @@ function TopNav({
               </div>
             </div>
           </div>
-          <button className="radar-icon-button" onClick={onRefresh} title="刷新">
+          <button className="radar-icon-button" onClick={onRefresh} title="刷新" aria-label="刷新仪表盘">
             <RefreshCcw className="size-4" />
           </button>
         </div>
@@ -427,18 +443,21 @@ function CommandDeck({
   activeKeywords: number;
 }) {
   const metrics = [
-    { label: "总热点", value: totalHotspots, tone: "default" },
-    { label: "今日新增", value: todayAdded, tone: "cyan" },
-    { label: "紧急热点", value: urgentCount, tone: "red" },
-    { label: "监控词", value: activeKeywords, tone: "green" }
+    { label: "总热点", value: totalHotspots, tone: "default", caption: "当前可见情报池" },
+    { label: "今日新增", value: todayAdded, tone: "cyan", caption: "新鲜内容入口" },
+    { label: "紧急热点", value: urgentCount, tone: "red", caption: "建议优先处理" },
+    { label: "监控词", value: activeKeywords, tone: "green", caption: "启用中的追踪" }
   ];
 
   return (
     <section className="metric-grid status-strip" aria-label="热点概览">
       {metrics.map((metric) => (
         <div key={metric.label} className={`metric-card ${metric.tone}`}>
-          <span>{metric.label}</span>
-          <strong>{metric.value}</strong>
+          <div>
+            <span>{metric.label}</span>
+            <strong>{metric.value}</strong>
+          </div>
+          <small>{metric.caption}</small>
         </div>
       ))}
     </section>
@@ -542,9 +561,10 @@ function HotspotView({
           </div>
         </section>
 
-        <div className="sort-filter-bar console-bar">
-          <div className="hotspot-search-bar">
+        <div className="sort-filter-bar console-bar" role="search" aria-label="热点筛选">
+          <label className="hotspot-search-bar">
             <Search className="size-4" />
+            <span className="sr-only">搜索热点标题或内容</span>
             <input
               type="text"
               placeholder="搜索热点标题、内容..."
@@ -560,7 +580,7 @@ function HotspotView({
                 ×
               </button>
             ) : null}
-          </div>
+          </label>
           <FilterDropdown
             label="排序"
             value={sortBy}
@@ -593,13 +613,16 @@ function HotspotView({
             ]}
             onChange={(v) => onPriorityFilter(v as typeof priorityFilter)}
           />
-          <input
-            className="source-search-input"
-            type="text"
-            placeholder="搜索来源..."
-            value={sourceFilter}
-            onChange={(e) => onSourceFilter(e.target.value)}
-          />
+          <label className="source-search-field">
+            <span className="sr-only">搜索来源</span>
+            <input
+              className="source-search-input"
+              type="text"
+              placeholder="搜索来源..."
+              value={sourceFilter}
+              onChange={(e) => onSourceFilter(e.target.value)}
+            />
+          </label>
         </div>
 
         <section className="feed-panel">
@@ -814,16 +837,14 @@ function HotspotCard({ item, onOpenOriginal }: {
 
   return (
     <article className={unread ? "signal-item unread" : "signal-item"}>
-      <div className="signal-card-top">
-        <div className="signal-badges">
-          <div className={`priority-badge ${priority.tone}`}>
-            <Zap className="size-3" />
-            {priority.label}
-          </div>
-          <div className="hotness-indicator" style={{ color: hotnessColor }}>
-            <Flame className="size-3" />
-            {Math.round(hotness)}
-          </div>
+      <div className="signal-score-rail">
+        <div className={`priority-badge ${priority.tone}`}>
+          <Zap className="size-3" />
+          {priority.label}
+        </div>
+        <div className="hotness-indicator" style={{ color: hotnessColor }}>
+          <Flame className="size-3" />
+          {Math.round(hotness)}
         </div>
       </div>
       <div className="signal-copy">
@@ -846,13 +867,12 @@ function HotspotCard({ item, onOpenOriginal }: {
               ) : null}
             </span>
           ) : null}
-          <span
-            className="read-badge"
-            style={{ visibility: (!unread && item.readAt) ? "visible" : "hidden", marginLeft: "auto" }}
-          >
-            <CheckCircle2 className="size-3" />
-            已读
-          </span>
+          {!unread && item.readAt ? (
+            <span className="read-badge">
+              <CheckCircle2 className="size-3" />
+              已读
+            </span>
+          ) : null}
         </div>
         <h3>
           <a
@@ -925,8 +945,14 @@ function MonitorView(props: {
       <section className="surface-panel control-panel">
         <SectionHeader icon={<Search className="size-4" />} title="关键词" />
         <div className="field-grid">
-          <input className="radar-input" value={props.keywordTerm} onChange={(event) => props.setKeywordTerm(event.target.value)} placeholder="关键词" />
-          <input className="radar-input" value={props.keywordScope} onChange={(event) => props.setKeywordScope(event.target.value)} placeholder="范围" />
+          <label className="field-label">
+            <span>关键词</span>
+            <input className="radar-input" value={props.keywordTerm} onChange={(event) => props.setKeywordTerm(event.target.value)} placeholder="例如 Unity" />
+          </label>
+          <label className="field-label">
+            <span>范围</span>
+            <input className="radar-input" value={props.keywordScope} onChange={(event) => props.setKeywordScope(event.target.value)} placeholder="行业、账号、技术范围" />
+          </label>
           <button className="solid-action-button" onClick={() => void props.addKeyword()}>
             <Plus className="size-4" />
             添加
@@ -962,6 +988,7 @@ function MonitorView(props: {
               <label className="toggle-switch" title={keyword.enabled ? "禁用" : "启用"}>
                 <input
                   type="checkbox"
+                  aria-label={`${keyword.enabled ? "禁用" : "启用"} ${keyword.term}`}
                   checked={keyword.enabled}
                   onChange={async () => {
                     await api.updateKeyword(keyword.id, { enabled: !keyword.enabled });
@@ -1008,9 +1035,18 @@ function SourceView(props: {
       <section className="surface-panel control-panel">
         <SectionHeader icon={<Rss className="size-4" />} title="添加来源" />
         <div className="field-grid">
-          <input className="radar-input" value={props.sourceName} onChange={(event) => props.setSourceName(event.target.value)} placeholder="来源名称" />
-          <input className="radar-input" value={props.sourceUrl} onChange={(event) => props.setSourceUrl(event.target.value)} placeholder="RSS URL" />
-          <input className="radar-input" value={props.sourceCategory} onChange={(event) => props.setSourceCategory(event.target.value)} placeholder="分类" />
+          <label className="field-label">
+            <span>来源名称</span>
+            <input className="radar-input" value={props.sourceName} onChange={(event) => props.setSourceName(event.target.value)} placeholder="来源名称" />
+          </label>
+          <label className="field-label">
+            <span>RSS URL</span>
+            <input className="radar-input" value={props.sourceUrl} onChange={(event) => props.setSourceUrl(event.target.value)} placeholder="RSS URL" />
+          </label>
+          <label className="field-label">
+            <span>分类</span>
+            <input className="radar-input" value={props.sourceCategory} onChange={(event) => props.setSourceCategory(event.target.value)} placeholder="分类" />
+          </label>
           <button className="solid-action-button" onClick={() => void props.addSource()}>
             <Plus className="size-4" />
             添加
