@@ -92,6 +92,47 @@ export function computePriorityScore(item: Pick<HotspotItem, "qualityScore" | "p
   return Math.round(Math.max(0, Math.min(100, score)));
 }
 
+export async function generateBriefing(items: Array<{ title: string; summary: string; matchedKeyword: string; priorityScore: number }>): Promise<string> {
+  const env = getEnv();
+  if (!env.openRouterApiKey) return generateMockBriefing(items);
+
+  const topItems = items
+    .sort((a, b) => b.priorityScore - a.priorityScore)
+    .slice(0, 10)
+    .map((item, i) => `${i + 1}. [${item.matchedKeyword}] ${item.title}${item.summary ? ` — ${item.summary.slice(0, 80)}` : ""}`)
+    .join("\n");
+
+  try {
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${env.openRouterApiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: env.openRouterModel,
+        messages: [
+          { role: "system", content: "你是资讯简报助手。根据给出的热点条目，用 2-3 句话做一份中文简报，概括当前最值得关注的主题和趋势。语气简洁专业，不超过 120 字，不分点。" },
+          { role: "user", content: topItems }
+        ],
+        temperature: 0.3,
+        max_tokens: 200
+      })
+    });
+    if (!response.ok) return generateMockBriefing(items);
+    const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
+    return data.choices?.[0]?.message?.content?.trim() || generateMockBriefing(items);
+  } catch {
+    return generateMockBriefing(items);
+  }
+}
+
+function generateMockBriefing(items: Array<{ title: string; matchedKeyword: string }>): string {
+  const top = items.sort((a, b) => 0).slice(0, 5);
+  const keywords = [...new Set(top.map((i) => i.matchedKeyword))].slice(0, 3).join("、");
+  return `当前监控到 ${items.length} 条热点，主要涉及 ${keywords} 等领域，其中多篇内容关注最新动态与技术趋势。`;
+}
+
 export async function evaluateItem(
   item: Pick<HotspotItem, "title" | "summary" | "url" | "publishedAt" | "matchedKeyword" | "qualityScore" | "qualitySignals" | "evidenceCount" | "evidenceProviders" | "sourceReliability" | "communitySource">,
   keyword: Keyword | null,

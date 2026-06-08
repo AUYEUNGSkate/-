@@ -42,6 +42,7 @@ export function App() {
   const [aiMode, setAiMode] = useState<AiMode>("openrouter");
   const [showArchived, setShowArchived] = useState(false);
   const [archivedItems, setArchivedItems] = useState<HotspotItem[]>([]);
+  const [briefing, setBriefing] = useState("");
   const [selectedArchivedIds, setSelectedArchivedIds] = useState<Set<number>>(new Set());
 
   useEffect(() => {
@@ -53,6 +54,12 @@ export function App() {
     setScanInterval(String(dashboard.settings.scanIntervalMinutes));
     setAiMode(dashboard.settings.aiMode);
   }, [dashboard]);
+
+  useEffect(() => {
+    if (dashboard && dashboard.items.length > 0) {
+      api.summary().then((s) => setBriefing(s.briefing)).catch(() => {});
+    }
+  }, [dashboard?.items.length]);
 
   const visibleItems = useMemo(() => {
     if (!dashboard) return [];
@@ -510,6 +517,8 @@ function HotspotView({
         </div>
       </section>
 
+      <SummaryPanel items={allItems} />
+
       <div className="sort-filter-bar">
         <FilterDropdown
           label="排序"
@@ -883,6 +892,27 @@ function reliabilityLabel(value: string | null): string {
   if (value === "community") return "社区";
   if (value === "search") return "搜索";
   return "未知";
+}
+
+function SummaryPanel({ items }: { items: HotspotItem[] }) {
+  const [briefing, setBriefing] = useState("");
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    if (items.length === 0) return;
+    setLoading(true);
+    api.summary().then((s) => { setBriefing(s.briefing); setLoading(false); }).catch(() => setLoading(false));
+  }, [items.length]);
+  if (!briefing) return null;
+  return (
+    <div className="briefing-panel">
+      <div className="briefing-header">
+        <Sparkles className="size-4" />
+        <span>AI 简报</span>
+        {loading ? <Loader2 className="size-3 animate-spin" /> : null}
+      </div>
+      <p className="briefing-text">{briefing}</p>
+    </div>
+  );
 }
 
 function FilterDropdown({ label, value, options, onChange }: { label: string; value: string; options: Array<{ key: string; label: string }>; onChange: (key: string) => void }) {

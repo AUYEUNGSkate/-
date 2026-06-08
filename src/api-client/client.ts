@@ -37,7 +37,8 @@ export const api = {
   restore: (id: number) => request<{ ok: boolean }>(`/items/${id}/restore`, { method: "POST" }),
   batchRestore: (ids: number[]) => request<{ ok: number }>("/items/batch-restore", { method: "POST", body: JSON.stringify({ ids }) }),
   batchDelete: (ids: number[]) => request<{ ok: number }>("/items/batch-delete", { method: "POST", body: JSON.stringify({ ids }) }),
-  archiveStale: () => request<{ ok: number; unreadCount: number }>("/items/archive-stale", { method: "POST" })
+  archiveStale: () => request<{ ok: number; unreadCount: number }>("/items/archive-stale", { method: "POST" }),
+  summary: () => request<{ briefing: string }>("/summary")
 };
 
 export function formatDate(value: string | null): string {

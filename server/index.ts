@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { getEnv } from "./config/env";
 import { getDb, repositories } from "./db/client";
 import { runScan } from "./services/scanner";
+import { generateBriefing } from "./services/ai";
 
 const app = express();
 const env = getEnv();
@@ -112,6 +113,21 @@ app.post("/api/items/batch-delete", (req, res) => {
 app.post("/api/items/archive-stale", (_req, res) => {
   const ok = repositories.items.archiveStaleItems();
   res.json({ ok, unreadCount: visibleUnreadCount(repositories.items.list()) });
+});
+
+app.get("/api/summary", async (_req, res) => {
+  try {
+    const items = repositories.items.list().map((item) => ({
+      title: item.title,
+      summary: item.summary,
+      matchedKeyword: item.matchedKeyword,
+      priorityScore: item.priorityScore
+    }));
+    const briefing = await generateBriefing(items);
+    res.json({ briefing });
+  } catch (error) {
+    res.json({ briefing: "简报生成失败，请稍后重试。" });
+  }
 });
 
 app.post("/api/scan", async (_req, res, next) => {
