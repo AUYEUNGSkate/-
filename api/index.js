@@ -2639,9 +2639,11 @@ function computeKeywordRelevance(title, summary, keywordTerm) {
     const hitRatio = hits.length / bigrams.length;
     const titleHasAny = bigrams.some((bg) => title.toLowerCase().includes(bg));
     if (hitRatio >= 1) return 85;
-    if (hitRatio >= 0.5 && titleHasAny) return 70;
-    if (hitRatio >= 0.5) return 50;
-    if (hitRatio > 0) return 30;
+    if (hitRatio >= 0.67 && titleHasAny) return 65;
+    if (hitRatio >= 0.67) return 60;
+    if (hitRatio >= 0.5 && titleHasAny) return 45;
+    if (hitRatio >= 0.5) return 35;
+    if (hitRatio > 0) return 20;
     return 0;
   }
   return 0;
@@ -2877,7 +2879,7 @@ async function runScan() {
       const source = sources.find((entry) => entry.id === raw.sourceId) ?? null;
       if (source && raw.qualityScore < source.minQualityScore) continue;
       const keywordRelevance = computeKeywordRelevance(raw.title, raw.summary, raw.matchedKeyword);
-      if (keywordRelevance < 30) {
+      if (keywordRelevance < 50) {
         console.log(`[scanner] low relevance (${keywordRelevance}): "${raw.matchedKeyword}" \u2192 "${raw.title.slice(0, 50)}"`);
         continue;
       }

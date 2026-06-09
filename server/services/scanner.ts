@@ -39,7 +39,7 @@ export async function runScan() {
 
       // Keyword relevance gate: skip items that don't actually mention the keyword
       const keywordRelevance = computeKeywordRelevance(raw.title, raw.summary, raw.matchedKeyword);
-      if (keywordRelevance < 30) {
+      if (keywordRelevance < 50) {
         console.log(`[scanner] low relevance (${keywordRelevance}): "${raw.matchedKeyword}" → "${raw.title.slice(0, 50)}"`);
         continue;
       }

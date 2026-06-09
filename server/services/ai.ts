@@ -103,9 +103,11 @@ export function computeKeywordRelevance(title: string, summary: string, keywordT
     const titleHasAny = bigrams.some((bg) => title.toLowerCase().includes(bg));
 
     if (hitRatio >= 1.0) return 85;
-    if (hitRatio >= 0.5 && titleHasAny) return 70;
-    if (hitRatio >= 0.5) return 50;
-    if (hitRatio > 0) return 30;
+    if (hitRatio >= 0.67 && titleHasAny) return 65;
+    if (hitRatio >= 0.67) return 60;
+    if (hitRatio >= 0.5 && titleHasAny) return 45;
+    if (hitRatio >= 0.5) return 35;
+    if (hitRatio > 0) return 20;
     return 0;
   }
 
