@@ -2909,21 +2909,19 @@ async function runScan() {
       seenIds.add(s.id);
       return true;
     }).slice(0, isVercel ? 1 : 15);
-    if (!isVercel) {
-      for (const candidate of aiCandidates) {
-        const item = await repos.items.byId(candidate.id);
-        if (!item) continue;
-        if (!isKeywordMentioned(item.title, item.summary, item.matchedKeyword)) {
-          console.log(`[scanner] skip AI eval (keyword not mentioned): ${item.title.slice(0, 40)}`);
-          await repos.items.updateStatus(candidate.id, "ignored");
-          continue;
-        }
-        const keyword = item.keywordId ? keywords.find((entry) => entry.id === item.keywordId) ?? null : null;
-        const source = item.sourceId ? sources.find((entry) => entry.id === item.sourceId) ?? null : null;
-        const evaluation = await evaluateItem(item, keyword, source);
-        await repos.items.addEvaluation(candidate.id, evaluation);
-        totals.evaluated += 1;
+    for (const candidate of aiCandidates) {
+      const item = await repos.items.byId(candidate.id);
+      if (!item) continue;
+      if (!isKeywordMentioned(item.title, item.summary, item.matchedKeyword)) {
+        console.log(`[scanner] skip AI eval (keyword not mentioned): ${item.title.slice(0, 40)}`);
+        await repos.items.updateStatus(candidate.id, "ignored");
+        continue;
       }
+      const keyword = item.keywordId ? keywords.find((entry) => entry.id === item.keywordId) ?? null : null;
+      const source = item.sourceId ? sources.find((entry) => entry.id === item.sourceId) ?? null : null;
+      const evaluation = await evaluateItem(item, keyword, source);
+      await repos.items.addEvaluation(candidate.id, evaluation);
+      totals.evaluated += 1;
     }
     for (const candidate of scoredItems) {
       const item = await repos.items.byId(candidate.id);

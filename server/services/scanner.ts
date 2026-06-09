@@ -76,8 +76,7 @@ export async function runScan() {
       return true;
     }).slice(0, isVercel ? 1 : 15);
 
-    if (!isVercel) {
-      for (const candidate of aiCandidates) {
+    for (const candidate of aiCandidates) {
         const item = await repos.items.byId(candidate.id);
         if (!item) continue;
 
@@ -93,7 +92,6 @@ export async function runScan() {
         await repos.items.addEvaluation(candidate.id, evaluation);
         totals.evaluated += 1;
       }
-    }
 
     for (const candidate of scoredItems) {
       const item = await repos.items.byId(candidate.id);
