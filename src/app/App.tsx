@@ -378,7 +378,7 @@ function TopNav({
           </span>
           <div>
             <strong>HotPulse</strong>
-            <small>AI 热点雷达</small>
+            <small>游戏热点雷达</small>
           </div>
         </div>
 
