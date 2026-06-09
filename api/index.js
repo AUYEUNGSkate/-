@@ -2933,20 +2933,22 @@ async function runScan() {
     for (const candidate of scoredItems) {
       const item = await repos.items.byId(candidate.id);
       if (!item) continue;
+      const priorityScore = computePriorityScore(item);
+      const finalscore = computeFreshnessScore(item.publishedAt);
       const finalRelevance = computeFinalRelevance(item);
       let status;
       if (finalRelevance < 30) {
         status = "ignored";
       } else if (finalRelevance < 50) {
-        status = candidate.priorityScore >= 75 ? "watch" : "ignored";
-      } else if (candidate.priorityScore >= 75) {
+        status = priorityScore >= 75 ? "watch" : "ignored";
+      } else if (priorityScore >= 75) {
         status = "new";
-      } else if (candidate.priorityScore >= 50) {
+      } else if (priorityScore >= 50) {
         status = "watch";
       } else {
         status = "ignored";
       }
-      await repos.items.updatePriority(candidate.id, candidate.priorityScore, candidate.freshnessScore, status);
+      await repos.items.updatePriority(candidate.id, priorityScore, finalscore, status);
     }
     await repos.scanRuns.finish(scanRunId, "success", totals);
     const archivedCount = await repos.items.archiveStaleItems();
