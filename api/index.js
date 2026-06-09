@@ -2622,15 +2622,37 @@ function computeKeywordRelevance(title, summary, keywordTerm) {
   if (!term) return 50;
   if (haystack.includes(term)) return 100;
   const tokens = term.split(/[,，、\s]+/).filter((t) => t.length > 1);
-  if (tokens.length === 0) return haystack.includes(term) ? 100 : 20;
-  const hits = tokens.filter((t) => haystack.includes(t));
-  const hitRatio = hits.length / tokens.length;
-  const titleHasKeyword = tokens.some((t) => title.toLowerCase().includes(t));
-  if (hitRatio >= 1) return 85;
-  if (hitRatio >= 0.5 && titleHasKeyword) return 70;
-  if (hitRatio >= 0.5) return 50;
-  if (hitRatio > 0) return 30;
+  if (tokens.length > 0) {
+    const hits = tokens.filter((t) => haystack.includes(t));
+    const hitRatio = hits.length / tokens.length;
+    const titleHasKeyword = tokens.some((t) => title.toLowerCase().includes(t));
+    if (hitRatio >= 1) return 85;
+    if (hitRatio >= 0.5 && titleHasKeyword) return 70;
+    if (hitRatio >= 0.5) return 50;
+    if (hitRatio > 0) return 30;
+    return 0;
+  }
+  if (/[\u4e00-\u9fff\u3400-\u4dbf]/.test(term) && term.length >= 2) {
+    const bigrams = generateBigrams(term);
+    if (bigrams.length === 0) return 0;
+    const hits = bigrams.filter((bg) => haystack.includes(bg));
+    const hitRatio = hits.length / bigrams.length;
+    const titleHasAny = bigrams.some((bg) => title.toLowerCase().includes(bg));
+    if (hitRatio >= 1) return 85;
+    if (hitRatio >= 0.5 && titleHasAny) return 70;
+    if (hitRatio >= 0.5) return 50;
+    if (hitRatio > 0) return 30;
+    return 0;
+  }
   return 0;
+}
+function generateBigrams(text2) {
+  const bigrams = [];
+  const chars = [...text2];
+  for (let i = 0; i < chars.length - 1; i++) {
+    bigrams.push(chars[i] + chars[i + 1]);
+  }
+  return bigrams;
 }
 function computePriorityScore(item) {
   const freshness = computeFreshnessScore(item.publishedAt);
@@ -2854,6 +2876,11 @@ async function runScan() {
     for (const raw of deduped) {
       const source = sources.find((entry) => entry.id === raw.sourceId) ?? null;
       if (source && raw.qualityScore < source.minQualityScore) continue;
+      const keywordRelevance = computeKeywordRelevance(raw.title, raw.summary, raw.matchedKeyword);
+      if (keywordRelevance < 30) {
+        console.log(`[scanner] low relevance (${keywordRelevance}): "${raw.matchedKeyword}" \u2192 "${raw.title.slice(0, 50)}"`);
+        continue;
+      }
       const result = await repos.items.insert(raw);
       if (!result) continue;
       if (result.inserted) {

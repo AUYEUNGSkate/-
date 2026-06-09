@@ -1,7 +1,7 @@
 ﻿import { repos, getDirectDb } from "../db/index";
 import { collectFromSources } from "./collector";
 import { titleSimilarity } from "./dedupe";
-import { evaluateItem, computePriorityScore, computeFreshnessScore, isKeywordMentioned, computeFinalRelevance } from "./ai";
+import { evaluateItem, computePriorityScore, computeFreshnessScore, isKeywordMentioned, computeFinalRelevance, computeKeywordRelevance } from "./ai";
 import type { CollectedItem } from "./collector";
 import type { HotspotItem } from "../../shared/types";
 
@@ -36,6 +36,13 @@ export async function runScan() {
     for (const raw of deduped) {
       const source = sources.find((entry) => entry.id === raw.sourceId) ?? null;
       if (source && raw.qualityScore < source.minQualityScore) continue;
+
+      // Keyword relevance gate: skip items that don't actually mention the keyword
+      const keywordRelevance = computeKeywordRelevance(raw.title, raw.summary, raw.matchedKeyword);
+      if (keywordRelevance < 30) {
+        console.log(`[scanner] low relevance (${keywordRelevance}): "${raw.matchedKeyword}" → "${raw.title.slice(0, 50)}"`);
+        continue;
+      }
 
       const result = await repos.items.insert(raw);
       if (!result) continue;
