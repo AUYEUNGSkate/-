@@ -101,8 +101,8 @@ async function seedData() {
   const env = getEnv();
   const count = await get("SELECT COUNT(*) AS count FROM settings");
   if (Number((count as { count: number }).count) === 0) {
-    await run("INSERT INTO settings (key, value) VALUES ('aiMode', ?)", { "aiMode": env.aiMode });
-    await run("INSERT INTO settings (key, value) VALUES ('scanIntervalMinutes', ?)", { "scanIntervalMinutes": String(env.scanIntervalMinutes) });
+    await run("INSERT INTO settings (key, value) VALUES ('aiMode', ?)", [env.aiMode]);
+    await run("INSERT INTO settings (key, value) VALUES ('scanIntervalMinutes', ?)", [String(env.scanIntervalMinutes)]);
   }
 
   const kCount = await get("SELECT COUNT(*) AS count FROM keywords");
