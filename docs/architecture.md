@@ -22,7 +22,7 @@
 | 图标 | lucide-react | 轻量、统一、适合按钮和状态标识 |
 | 后端 API | Express + TypeScript | 简单直接，适合轻量 API 和本机服务 |
 | 后台任务 | Node worker + `setInterval` | 支持 5-1440 分钟间隔，避免 cron 步进在 60 分钟以上失效；并发保护由扫描器内部锁完成 |
-| 数据库 | SQLite + better-sqlite3 | 本地文件数据库，无需外部服务，prepared statement 简洁 |
+| 数据库 | SQLite + better-sqlite3（本地） / Turso + libsql（云） | 本地文件数据库；云部署使用 Turso 持久化 |
 | RSS/XML | fast-xml-parser | 当前文档可查，直接解析 RSS/Atom XML，避免文档缺失库 |
 | AI | OpenRouter | OpenAI-compatible API，支持 Bearer 鉴权和结构化输出 |
 | 测试 | Vitest + Supertest | 适合 TypeScript 项目，覆盖服务和 API |
@@ -209,6 +209,16 @@ Web 版验收通过后，再创建 `skills/game-hotspot-monitor`：
 - Skill 只描述如何调用已有扫描能力，不复制一套业务逻辑。
 - Skill 应包含关键词配置、扫描执行、结果解释、避免重复推送的流程。
 - Skill 创建时继续遵守当前 Skill Creator 指南。
+
+## Vercel 部署
+
+线上版本部署在 Vercel（https://hotpulse-iota.vercel.app），使用以下架构适配 Serverless：
+
+- **API 路由**：所有 `/api/*` 请求路由至单一 Serverless Function (`api/index.js`)，通过 ESBuild 预编译
+- **数据库**：使用 Turso（libsql）替代本地 SQLite，实现跨实例数据共享
+- **扫描**：并行采集源（Promise.all），8s fetch 超时，Vercel 自动跳过慢速 API 源
+- **AI 评估**：每轮扫描限制评估 1 条热点（适应 30s 超时）
+- **已知限制**：扫描可能因 30s 超时未完成，但 Turso 持久化确保数据不丢失；推荐 Railway/Render 获取无限制执行时间
 
 ## 本地终端
 

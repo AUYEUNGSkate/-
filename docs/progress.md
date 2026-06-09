@@ -1,121 +1,57 @@
 # 项目进度记录
 
-更新时间：2026-06-09  
-当前提交：36be1b1
+更新时间：2026-06-09
+当前提交：085fd53
 
 ## 当前状态
 
-- Web 版 v1 已通过全部验收，前后端均已本机可运行。
-- 后端 API、SQLite 持久化、worker 定时扫描、OpenRouter/Mock AI 判别已具备基础能力。
-- 前端工作台已支持 AI 简报、AI 分析理由、排序/筛选工具栏、关键词开关、来源管理、归档查看。
-- 已完成"赛博霓虹双栏工作台"展示优化和无障碍访问改进。
+- **线上版本**：已部署到 Vercel → https://hotpulse-iota.vercel.app
+- **本地版本**：`http://127.0.0.1:5173`（完整可用）
+- 后端 API、Turso 云数据库、OpenRouter AI 判别已集成。
+- 支持本地 SQLite 和 Vercel Turso 双模式自动切换。
+- 前端工作台：AI 简报、AI 分析理由、排序/筛选工具栏、关键词开关、来源管理、归档查看。
 
-## 本次已完成（2026-06-09 最终版）
+## Vercel 部署（2026-06-09）
 
-### 赛博霓虹视觉重构
-- 全面重绘 CSS 变量配色系统，主色调由 `#22d3ee` 切换为 `#38bdf8` 青色系。
-- body 背景增加多层次渐变（网格 + 径向光晕），营造赛博情报室氛围。
-- 导航栏背景半透明化，品牌图标增加蓝色渐变光影。
-- 指标卡片增加彩色边框和辅助说明文字（caption）。
-- 面板统一圆角 8px、半透明背景 + backdrop-blur，视觉更统一。
-- 新增 `.sr-only` 无障碍辅助类，全站 `:focus-visible` 焦点环样式。
-- 新增 `prefers-reduced-motion: reduce` 全局关闭动画。
+### 架构
+- **前端**：Vite React SPA，托管在 Vercel Static
+- **后端**：Express API，作为 Vercel Serverless Function（`api/index.js`）
+- **数据库**：Turso 云 SQLite（`libsql://`），替代本地 SQLite
+- **AI**：OpenRouter API（每轮扫描评估 1 条热点，时间限制）
 
-### 热点卡片信号条布局重构
-- 热点卡片改为双栏网格：左侧 `signal-score-rail`（优先级徽标 + 热度值），右侧主内容区。
-- 优先级徽标 HIGH/MEDIUM/LOW 改为竖向条状排列，宽度统一 74px。
-- 未读项左侧增加 2px 青色强调线 (`inset box-shadow`)。
-- 已读徽标由 `visibility: hidden` 改为条件渲染，DOM 更干净。
-- 信号来源标签增加圆角背景，作者/可靠性信息对齐优化。
+### 已知限制
+- **扫描 30s 超时**：Vercel Hobby 限制，扫描可多次运行积累数据
+- **AI 评估受限**：每轮仅评估 1 条热点（超时限制）
+- **无 worker**：Vercel 不支持持久后台进程，需手动触发扫描
+- **端口不一致**：本地开发需单独启动 web + api
 
-### 控制台筛选条网格化
-- 控制台条改为 CSS Grid 多列布局：搜索框(1fr) + 排序 + 已读 + 重要 + 来源搜索。
-- 搜索框与来源搜索改为 `<label>` 包裹语义结构。
-- 所有表单控件增加 `aria-label` 无障碍标注。
+### 环境变量（Vercel）
+| 变量 | 说明 |
+|------|------|
+| `OPEN_ROUTER` | OpenRouter API Key |
+| `AI_MODE` | `openrouter` 或 `mock` |
+| `TURSO_URL` | Turso 数据库 URL |
+| `TURSO_AUTH_TOKEN` | Turso 认证 Token |
 
-### 交互与动效升级
-- 扫描按钮从普通按钮升级为 `HoverBorderGradient` 渐变动画按钮。
-- 新增固定位 `Spotlight` 背景聚光效果，z-index=-1 置于所有内容之下。
-- 响应式断点扩展至 1180px/1100px/900px/640px 四档。
+## 本次已完成（Vercel 适配）
 
-### 表单字段标注
-- 关键词/来源/设置的输入框统一增加 `<label>` 语义标签。
-- 输入框 placeholder 文案优化（如"例如 Unity"、"行业、账号、技术范围"）。
+### Turso 云数据库集成
+- `server/db/turso.ts`：基于 `@libsql/client` 的异步 SQLite 兼容层
+- `server/db/index.ts`：Vercel / 本地自动切换的 repos 路由
+- 所有 API 端点改为异步（兼容 Turso HTTP 访问）
 
-## 历史已完成
+### 扫描优化
+- **并行采集**：`Promise.all` 同时请求所有 RSS 源（从串行 144s → 并行 8s）
+- **超时控制**：每个 fetch 请求 8s 超时，避免死等
+- **关键词相关性过滤**：入库前用 bigram 算法过滤不相关内容（门槛 ≥50 分）
+- **Vercel 快速模式**：自动过滤慢速来源，仅使用 RSS
 
-### 前端工作台视觉与布局优化
-- 热点页升级为左侧热点流、右侧 AI 洞察栏的双栏工作台，桌面端提升信息密度，小屏幕自动切回单栏。
-- 右侧洞察栏复用 AI 简报，并新增未读数、高优先级数、今日新增、当前筛选摘要和 Top 高优先级热点列表。
-- 筛选区改为控制台条，搜索输入、排序、已读、重要程度、来源过滤保持原有逻辑。
-- 热点卡片改为信号条样式，未读项增加左侧青色强调线，HIGH/MEDIUM/LOW 徽标与深色雷达主题统一。
-- AI 分析理由模块保留默认展开，并统一为细边框、弱蓝色背景和左侧强调线。
-- 通知弹窗补充移动端宽度约束，避免窄屏溢出。
-
-### AI 分析理由模块
-- 热点卡片摘要下方新增 `AI 分析` 区块，优先展示 `evaluation.relevanceSummary`，缺失时回退到 `evaluation.reason`。
-- 无 AI 评估的内容不显示该模块，避免 Mock 或未评估内容造成误导。
-- 推荐动作 `notify/watch/ignore` 显示为中文“通知 / 关注 / 忽略”。
-
-### 检索精度优化
-- 百度搜索加双引号精确匹配 `"vibe coding"`，排除 CSDN/知乎/简书等 SEO 农场站。
-- 新增 `computeKeywordRelevance()` 关键词相关性评分，纳入 priorityScore 公式（权重 15%）。
-- 无 `{query}` 的全站 RSS 源（机核网/游研社/触乐）增加标题+摘要双重关键词过滤。
-- B站搜索增加二次标题/摘要关键词相关性过滤（enrichment 后）。
-- 新增 `isGameKeyword()` 自动判别：非游戏词自动跳过 3 个游戏媒体 RSS 源，仅查百度+B站+微博。
-
-### 信息质量过滤升级
-新增 4 条内容审核规则（`contentFilter.ts`）：
-
-| 规则 | 扣分 | 覆盖 |
-|------|------|------|
-| R1 百度中转/索引 URL | -45 | `baidu.com/link`、`/sf/` |
-| R2 SEO 堆砌标题 | -40 | ≥10个逗号片段或中英混排≥5次 |
-| R3 目录/导航页标题 | -35 | 含"目录""索引""问答""聚合" |
-| R4 空内容页 | -50 | 纯日期标题或极短无摘要页 |
-
-### 信息源扩展
-- 新增 游研社 RSS (`yystv.cn/rss/feed`)。
-- 新增 触乐 RSS (`chuapp.com/feed`)。
-- 新增 微博热搜 源（`weibo_hot`），直接调用公开 API，5 分钟缓存，按关键词 + 游戏词库双匹过滤。
-- 新增 B站搜索 源（`bilibili_search`），调用公开搜索 API，≥1000 播放过滤。
-- RSSHub URL 统一切换为 `rsshub.rssforever.com`（无 Cloudflare）。
-- 游民星空 因噪音大已停用。
-- 全量源清单（启用 6 个）：机核网、游研社、触乐、B站视频搜索、微博热搜、RSSHub 百度搜索。
-
-### 排序/筛选系统
-- 工具栏改为 4 个下拉菜单：排序（优先/最新/最热互动/仅未读）、已读、重要程度（热门/关注/低质）、来源搜索。
-- 来源改为搜索输入框实时过滤，大小写不敏感。
-- 关键词启用/禁用改为 iOS 绿色开关滑块。
-
-### AI 简报
-- 新增 `GET /api/summary` 接口。
-- 每次扫描后自动调用 AI 生成 2-3 句话中文简报。
-- 无 OpenRouter Key 时回退 Mock 摘要。
-- 前端热点列表上方展示 AI 简报卡片。
-
-### 未读/已读优化
-- 移除「标记已读」按钮，点击标题打开原文时自动标记已读。
-- 已读项显示绿色 `✓ 已读` 徽标替换蓝色未读圆点。
-- 通知弹窗点击项自动标记已读。
-
-### 管道重构
-新扫描流程：收集 → 去重 → 新鲜度打分 → 质量过滤 → 入库 → 优先级评分 → Top15 AI 评估 → 分级 → 排序展示。
-
-### 数据库新增字段
-- `items.priority_score`：综合优先级评分
-- `items.freshness_score`：新鲜度评分
-- `items.summary_source / interaction_source`：来源标记
-
-### 新增模块
-- `server/services/enrichment.ts`：B站/Zhihu/WeChat/Weibo 互动量与简介补全
-- `tests/relevance.test.ts`：关键词相关性 + 游戏判别测试（8 用例）
-- `tests/enrichment.test.ts`：互动量补全测试（5 用例）
-- `tests/repository.test.ts`：数据仓储测试（3 用例）
+### CJK 关键词精度
+- 新增中日韩双字组合（bigram）分词匹配
+- 评分阈值收紧：50%（非标题）→ 35 分，低于 50 分门槛过滤
+- 解决"搜游戏节出现游戏上线"的问题
 
 ## 已验证
-
-已运行并通过：
 
 ```powershell
 & 'D:\Node.js\npm.cmd' test
@@ -124,24 +60,21 @@
 ```
 
 验证结果：
-
 - 测试文件：11 个通过
 - 测试用例：135 个通过
 - TypeScript 类型检查通过
 - Vite 生产构建通过
-- 本地前端已可打开：`http://127.0.0.1:5173`
-- 本地后端已可访问：`http://127.0.0.1:8787`
 
 ## 当前限制
 
-- Brave Search 是可选增强源，默认禁用；如需启用才配置 `BRAVE_SEARCH_API_KEY`。
-- RSSHub 桥接源需确保 `rsshub.rssforever.com` 可访问；部分路由返回 503。
-- B站互动量通过公开视频 API 获取；游戏网站仅做轻量 metadata/文本识别。
-- 微博热搜仅在当日有游戏相关话题时产出内容。
-- AI 简报依赖 OpenRouter Key，无 Key 时使用 Mock 摘要。
+- Vercel 扫描有 30s 上限，如需完整扫描体验推荐 Railway.app
+- Brave Search 是可选增强源，默认禁用
+- RSSHub 桥接源需确保 `rsshub.rssforever.com` 可访问
+- B站互动量通过公开视频 API 获取
+- AI 简报依赖 OpenRouter Key
 
 ## 下一步建议
 
-1. 配置真实 OpenRouter Key 后验证 AI 简报和判别效果。
-2. 观察关键词自动判别（游戏/非游戏）的准确率。
-3. Web 版稳定后，进入 Agent Skill 封装阶段。
+1. 将项目迁移到 Railway / Render 以获得无限制扫描时间
+2. 完善 Agent Skill 封装
+3. 添加 Telegram / Webhook 外部通知
