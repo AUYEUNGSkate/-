@@ -58,21 +58,28 @@ const GAME_MEDIA_SOURCES = new Set(["机核网", "游研社", "触乐"]);
 export async function collectFromSources(keywords: Keyword[], sources: Source[]): Promise<CollectedItem[]> {
   const results: CollectedItem[] = [];
   const failures = new Map<string, { count: number; messages: Set<string> }>();
+
+  const tasks: Array<Promise<CollectedItem[]>> = [];
   for (const keyword of keywords) {
     const isGame = isGameKeyword(keyword);
     for (const source of sources) {
-      // 非游戏关键词跳过游戏媒体 RSS 源
       if (!isGame && GAME_MEDIA_SOURCES.has(source.name)) continue;
-      try {
-        results.push(...await collectFromSource(keyword, source));
-      } catch (error) {
-        const key = `${source.name} (${source.providerType})`;
-        const current = failures.get(key) ?? { count: 0, messages: new Set<string>() };
-        current.count += 1;
-        current.messages.add(error instanceof Error ? error.message : String(error));
-        failures.set(key, current);
-      }
+      tasks.push(
+        collectFromSource(keyword, source).catch((error) => {
+          const key = `${source.name} (${source.providerType})`;
+          const current = failures.get(key) ?? { count: 0, messages: new Set<string>() };
+          current.count += 1;
+          current.messages.add(error instanceof Error ? error.message : String(error));
+          failures.set(key, current);
+          return [];
+        })
+      );
     }
+  }
+
+  const batches = await Promise.all(tasks);
+  for (const batch of batches) {
+    results.push(...batch);
   }
   if (failures.size > 0) {
     const summary = Array.from(failures.entries())

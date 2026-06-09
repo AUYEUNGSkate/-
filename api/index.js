@@ -1682,20 +1682,26 @@ var GAME_MEDIA_SOURCES = /* @__PURE__ */ new Set(["\u673A\u6838\u7F51", "\u6E38\
 async function collectFromSources(keywords, sources) {
   const results = [];
   const failures = /* @__PURE__ */ new Map();
+  const tasks = [];
   for (const keyword of keywords) {
     const isGame = isGameKeyword(keyword);
     for (const source of sources) {
       if (!isGame && GAME_MEDIA_SOURCES.has(source.name)) continue;
-      try {
-        results.push(...await collectFromSource(keyword, source));
-      } catch (error) {
-        const key = `${source.name} (${source.providerType})`;
-        const current = failures.get(key) ?? { count: 0, messages: /* @__PURE__ */ new Set() };
-        current.count += 1;
-        current.messages.add(error instanceof Error ? error.message : String(error));
-        failures.set(key, current);
-      }
+      tasks.push(
+        collectFromSource(keyword, source).catch((error) => {
+          const key = `${source.name} (${source.providerType})`;
+          const current = failures.get(key) ?? { count: 0, messages: /* @__PURE__ */ new Set() };
+          current.count += 1;
+          current.messages.add(error instanceof Error ? error.message : String(error));
+          failures.set(key, current);
+          return [];
+        })
+      );
     }
+  }
+  const batches = await Promise.all(tasks);
+  for (const batch of batches) {
+    results.push(...batch);
   }
   if (failures.size > 0) {
     const summary = Array.from(failures.entries()).map(([name, failure]) => {
