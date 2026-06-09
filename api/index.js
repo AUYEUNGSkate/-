@@ -2905,7 +2905,7 @@ async function runScan() {
       const priorityScore = computePriorityScore(item);
       scoredItems.push({ id: itemId, priorityScore, freshnessScore });
     }
-    const existingTop = (await repos.items.list(50)).filter((i) => i.evaluation !== null && !insertedIds.includes(i.id)).slice(0, 8);
+    const existingTop = (await repos.items.list(50)).filter((i) => !insertedIds.includes(i.id)).slice(0, 8);
     for (const item of existingTop) {
       scoredItems.push({ id: item.id, priorityScore: item.priorityScore, freshnessScore: item.freshnessScore });
     }
