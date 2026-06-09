@@ -2,7 +2,7 @@ import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getEnv } from "./config/env";
-import { getDb, repositories } from "./db/client";
+import { repos, initDb } from "./db/index";
 import { runScan } from "./services/scanner";
 import { generateBriefing } from "./services/ai";
 
@@ -11,113 +11,115 @@ const env = getEnv();
 
 app.use(express.json({ limit: "1mb" }));
 
-app.get("/api/health", (_req, res) => {
-  getDb();
+app.get("/api/health", async (_req, res) => {
+  await initDb();
   res.json({ ok: true, time: new Date().toISOString() });
 });
 
-app.get("/api/dashboard", (_req, res) => {
-  res.json(getDashboard());
+app.get("/api/dashboard", async (_req, res) => {
+  res.json(await getDashboard());
 });
 
-app.get("/api/settings", (_req, res) => {
-  res.json(repositories.settings.all());
+app.get("/api/settings", async (_req, res) => {
+  res.json(await repos.settings.all());
 });
 
-app.patch("/api/settings", (req, res) => {
+app.patch("/api/settings", async (req, res) => {
   const { aiMode, scanIntervalMinutes } = req.body as { aiMode?: string; scanIntervalMinutes?: number };
   if (aiMode && !["openrouter", "mock"].includes(aiMode)) {
     return res.status(400).json({ error: "Invalid aiMode" });
   }
-  if (aiMode) repositories.settings.set("aiMode", aiMode);
+  if (aiMode) await repos.settings.set("aiMode", aiMode);
   if (typeof scanIntervalMinutes === "number") {
     if (scanIntervalMinutes < 5 || scanIntervalMinutes > 1440) {
       return res.status(400).json({ error: "scanIntervalMinutes must be 5-1440" });
     }
-    repositories.settings.set("scanIntervalMinutes", String(Math.round(scanIntervalMinutes)));
+    await repos.settings.set("scanIntervalMinutes", String(Math.round(scanIntervalMinutes)));
   }
-  return res.json(repositories.settings.all());
+  return res.json(await repos.settings.all());
 });
 
-app.get("/api/keywords", (_req, res) => {
-  res.json(repositories.keywords.all());
+app.get("/api/keywords", async (_req, res) => {
+  res.json(await repos.keywords.all());
 });
 
-app.post("/api/keywords", (req, res) => {
+app.post("/api/keywords", async (req, res) => {
   const { term, scope } = req.body as { term?: string; scope?: string };
   if (!term?.trim()) return res.status(400).json({ error: "term is required" });
-  return res.status(201).json(repositories.keywords.create(term, scope ?? ""));
+  return res.status(201).json(await repos.keywords.create(term, scope ?? ""));
 });
 
-app.patch("/api/keywords/:id", (req, res) => {
-  const item = repositories.keywords.update(Number(req.params.id), req.body);
+app.patch("/api/keywords/:id", async (req, res) => {
+  const item = await repos.keywords.update(Number(req.params.id), req.body);
   if (!item) return res.status(404).json({ error: "Keyword not found" });
   return res.json(item);
 });
 
-app.delete("/api/keywords/:id", (req, res) => {
-  return res.json({ ok: repositories.keywords.delete(Number(req.params.id)) });
+app.delete("/api/keywords/:id", async (req, res) => {
+  return res.json({ ok: await repos.keywords.delete(Number(req.params.id)) });
 });
 
-app.get("/api/sources", (_req, res) => {
-  res.json(repositories.sources.all());
+app.get("/api/sources", async (_req, res) => {
+  res.json(await repos.sources.all());
 });
 
-app.post("/api/sources", (req, res) => {
+app.post("/api/sources", async (req, res) => {
   const { name, url, category } = req.body as { name?: string; url?: string; category?: string };
   if (!name?.trim() || !url?.trim()) return res.status(400).json({ error: "name and url are required" });
-  return res.status(201).json(repositories.sources.create({ name, url, category: category ?? "自定义" }));
+  return res.status(201).json(await repos.sources.create({ name, url, category: category ?? "自定义" }));
 });
 
-app.patch("/api/sources/:id", (req, res) => {
-  const item = repositories.sources.update(Number(req.params.id), req.body);
+app.patch("/api/sources/:id", async (req, res) => {
+  const item = await repos.sources.update(Number(req.params.id), req.body);
   if (!item) return res.status(404).json({ error: "Source not found" });
   return res.json(item);
 });
 
-app.delete("/api/sources/:id", (req, res) => {
-  return res.json({ ok: repositories.sources.delete(Number(req.params.id)) });
+app.delete("/api/sources/:id", async (req, res) => {
+  return res.json({ ok: await repos.sources.delete(Number(req.params.id)) });
 });
 
-app.get("/api/items", (req, res) => {
+app.get("/api/items", async (req, res) => {
   const limit = Number(req.query.limit ?? 80);
-  res.json(repositories.items.list(limit));
+  res.json(await repos.items.list(limit));
 });
 
-app.patch("/api/items/:id/read", (req, res) => {
-  const ok = repositories.items.markRead(Number(req.params.id));
-  res.json({ ok, unreadCount: visibleUnreadCount(repositories.items.list()) });
+app.patch("/api/items/:id/read", async (req, res) => {
+  const ok = await repos.items.markRead(Number(req.params.id));
+  const items = await repos.items.list();
+  res.json({ ok, unreadCount: visibleUnreadCount(items) });
 });
 
-app.get("/api/items/archived", (req, res) => {
+app.get("/api/items/archived", async (req, res) => {
   const limit = Number(req.query.limit ?? 100);
-  res.json(repositories.items.archived(limit));
+  res.json(await repos.items.archived(limit));
 });
 
-app.post("/api/items/:id/restore", (req, res) => {
-  res.json({ ok: repositories.items.restore(Number(req.params.id)) });
+app.post("/api/items/:id/restore", async (req, res) => {
+  res.json({ ok: await repos.items.restore(Number(req.params.id)) });
 });
 
-app.post("/api/items/batch-restore", (req, res) => {
+app.post("/api/items/batch-restore", async (req, res) => {
   const { ids } = req.body as { ids?: number[] };
   if (!ids?.length) return res.status(400).json({ error: "ids is required" });
-  res.json({ ok: repositories.items.batchRestore(ids) });
+  res.json({ ok: await repos.items.batchRestore(ids) });
 });
 
-app.post("/api/items/batch-delete", (req, res) => {
+app.post("/api/items/batch-delete", async (req, res) => {
   const { ids } = req.body as { ids?: number[] };
   if (!ids?.length) return res.status(400).json({ error: "ids is required" });
-  res.json({ ok: repositories.items.batchDelete(ids) });
+  res.json({ ok: await repos.items.batchDelete(ids) });
 });
 
-app.post("/api/items/archive-stale", (_req, res) => {
-  const ok = repositories.items.archiveStaleItems();
-  res.json({ ok, unreadCount: visibleUnreadCount(repositories.items.list()) });
+app.post("/api/items/archive-stale", async (_req, res) => {
+  const ok = await repos.items.archiveStaleItems();
+  const items = await repos.items.list();
+  res.json({ ok, unreadCount: visibleUnreadCount(items) });
 });
 
 app.get("/api/summary", async (_req, res) => {
   try {
-    const items = repositories.items.list().map((item) => ({
+    const items = (await repos.items.list()).map((item) => ({
       title: item.title,
       summary: item.summary,
       matchedKeyword: item.matchedKeyword,
@@ -133,7 +135,7 @@ app.get("/api/summary", async (_req, res) => {
 app.post("/api/scan", async (_req, res, next) => {
   try {
     const result = await runScan();
-    res.json({ result, dashboard: getDashboard() });
+    res.json({ result, dashboard: await getDashboard() });
   } catch (error) {
     next(error);
   }
@@ -160,14 +162,14 @@ if (!process.env.VERCEL) {
 
 export default app;
 
-function getDashboard() {
-  const items = repositories.items.list();
+async function getDashboard() {
+  const items = await repos.items.list();
   return {
-    settings: repositories.settings.all(),
-    keywords: repositories.keywords.all(),
-    sources: repositories.sources.all(),
+    settings: await repos.settings.all(),
+    keywords: await repos.keywords.all(),
+    sources: await repos.sources.all(),
     items,
-    lastScan: repositories.scanRuns.last(),
+    lastScan: await repos.scanRuns.last(),
     unreadCount: visibleUnreadCount(items)
   };
 }
