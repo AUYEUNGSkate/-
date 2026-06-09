@@ -56,6 +56,7 @@ export const repos = {
     async insert(input: RawItemInput): Promise<{ id: number; inserted: boolean } | null> { return process.env.VERCEL ? tursoRepos.items.insert(input) : syncRepos.items.insert(input); },
     async markRead(id: number): Promise<boolean> { return process.env.VERCEL ? tursoRepos.items.markRead(id) : syncRepos.items.markRead(id); },
     async updateStatus(id: number, status: HotspotItem["status"]): Promise<void> { if (process.env.VERCEL) await tursoRepos.items.updateStatus(id, status); else syncRepos.items.updateStatus(id, status); },
+    async updatePriority(id: number, priorityScore: number, freshnessScore: number, status: string): Promise<void> { if (process.env.VERCEL) await tursoRepos.items.updatePriority(id, priorityScore, freshnessScore, status); else syncRepos.items.updatePriority(id, priorityScore, freshnessScore, status); },
     async addEvaluation(itemId: number, evaluation: AiEvaluation): Promise<void> { if (process.env.VERCEL) await tursoRepos.items.addEvaluation(itemId, evaluation); else syncRepos.items.addEvaluation(itemId, evaluation); },
   },
   scanRuns: {

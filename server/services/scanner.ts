@@ -1,4 +1,4 @@
-﻿import { repos, getDirectDb } from "../db/index";
+﻿import { repos } from "../db/index";
 import { collectFromSources } from "./collector";
 import { titleSimilarity } from "./dedupe";
 import { evaluateItem, computePriorityScore, computeFreshnessScore, isKeywordMentioned, computeFinalRelevance, computeKeywordRelevance } from "./ai";
@@ -111,9 +111,7 @@ export async function runScan() {
         status = "ignored";
       }
 
-      const db = getDirectDb();
-      db.prepare("UPDATE items SET priority_score = ?, freshness_score = ?, status = ? WHERE id = ?")
-        .run(candidate.priorityScore, candidate.freshnessScore, status, candidate.id);
+      await repos.items.updatePriority(candidate.id, candidate.priorityScore, candidate.freshnessScore, status);
     }
 
     await repos.scanRuns.finish(scanRunId, "success", totals);

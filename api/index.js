@@ -1074,6 +1074,9 @@ var repositories = {
     updateStatus(id, status) {
       getDb().prepare("UPDATE items SET status = ? WHERE id = ?").run(status, id);
     },
+    updatePriority(id, priorityScore, freshnessScore, status) {
+      getDb().prepare("UPDATE items SET priority_score = ?, freshness_score = ?, status = ? WHERE id = ?").run(priorityScore, freshnessScore, status, id);
+    },
     addEvaluation(itemId, evaluation) {
       getDb().prepare(`
         INSERT INTO ai_evaluations (
@@ -1671,6 +1674,9 @@ var tursoRepos = {
     async updateStatus(id, status) {
       await run("UPDATE items SET status=? WHERE id=?", [status, id]);
     },
+    async updatePriority(id, priorityScore, freshnessScore, status) {
+      await run("UPDATE items SET priority_score=?,freshness_score=?,status=? WHERE id=?", [priorityScore, freshnessScore, status, id]);
+    },
     async addEvaluation(itemId, evaluation) {
       await run(
         `INSERT INTO ai_evaluations (item_id,relevance_score,credibility_score,novelty_score,hotness_score,is_impersonation_likely,summary,reason,recommended_action,keyword_mentioned,relevance_summary,raw_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(item_id) DO UPDATE SET relevance_score=excluded.relevance_score,credibility_score=excluded.credibility_score,novelty_score=excluded.novelty_score,hotness_score=excluded.hotness_score,is_impersonation_likely=excluded.is_impersonation_likely,summary=excluded.summary,reason=excluded.reason,recommended_action=excluded.recommended_action,keyword_mentioned=excluded.keyword_mentioned,relevance_summary=excluded.relevance_summary,raw_json=excluded.raw_json`,
@@ -1802,6 +1808,10 @@ var repos = {
       if (process.env.VERCEL) await tursoRepos.items.updateStatus(id, status);
       else repositories.items.updateStatus(id, status);
     },
+    async updatePriority(id, priorityScore, freshnessScore, status) {
+      if (process.env.VERCEL) await tursoRepos.items.updatePriority(id, priorityScore, freshnessScore, status);
+      else repositories.items.updatePriority(id, priorityScore, freshnessScore, status);
+    },
     async addEvaluation(itemId, evaluation) {
       if (process.env.VERCEL) await tursoRepos.items.addEvaluation(itemId, evaluation);
       else repositories.items.addEvaluation(itemId, evaluation);
@@ -1820,9 +1830,6 @@ var repos = {
     }
   }
 };
-function getDirectDb() {
-  return getDb();
-}
 
 // server/services/collector.ts
 import { XMLParser, XMLValidator } from "fast-xml-parser";
@@ -2939,8 +2946,7 @@ async function runScan() {
       } else {
         status = "ignored";
       }
-      const db = getDirectDb();
-      db.prepare("UPDATE items SET priority_score = ?, freshness_score = ?, status = ? WHERE id = ?").run(candidate.priorityScore, candidate.freshnessScore, status, candidate.id);
+      await repos.items.updatePriority(candidate.id, candidate.priorityScore, candidate.freshnessScore, status);
     }
     await repos.scanRuns.finish(scanRunId, "success", totals);
     const archivedCount = await repos.items.archiveStaleItems();

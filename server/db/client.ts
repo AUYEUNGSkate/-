@@ -858,6 +858,10 @@ export const repositories = {
     updateStatus(id: number, status: HotspotItem["status"]) {
       getDb().prepare("UPDATE items SET status = ? WHERE id = ?").run(status, id);
     },
+    updatePriority(id: number, priorityScore: number, freshnessScore: number, status: string) {
+      getDb().prepare("UPDATE items SET priority_score = ?, freshness_score = ?, status = ? WHERE id = ?")
+        .run(priorityScore, freshnessScore, status, id);
+    },
     addEvaluation(itemId: number, evaluation: AiEvaluation) {
       getDb().prepare(`
         INSERT INTO ai_evaluations (
