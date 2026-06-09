@@ -13,6 +13,8 @@ await esbuild.build({
     "dotenv",
     "fast-xml-parser",
     "tsx",
+    "@libsql/client",
+    "@neon-rs/load",
   ],
   banner: {
     js: 'process.env.VERCEL = "1";'
