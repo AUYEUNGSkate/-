@@ -1668,6 +1668,11 @@ var parser = new XMLParser({
   textNodeName: "#text",
   trimValues: true
 });
+function fetchWithTimeout(url, init, timeoutMs = 8e3) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, { ...init, signal: controller.signal }).finally(() => clearTimeout(timer));
+}
 var GAME_TERMS = ["\u6E38\u620F", "\u7535\u7ADE", "\u624B\u6E38", "\u4E3B\u673A", "PS5", "Switch", "Steam", "\u539F\u795E", "\u7C73\u54C8\u6E38", "\u817E\u8BAF", "\u7F51\u6613", "3A", "\u8D5B\u535A", "\u9ED1\u795E\u8BDD", "\u865A\u5E7B", "Unity", "\u80B2\u78A7", "\u66B4\u96EA", "R\u661F"];
 function isGameKeyword(keyword) {
   const haystack = `${keyword.term} ${keyword.scope}`.toLowerCase();
@@ -1774,7 +1779,7 @@ async function collectFromBraveSearch(keyword, source) {
   url.searchParams.set("freshness", "pd");
   url.searchParams.set("country", "cn");
   url.searchParams.set("search_lang", "zh-hans");
-  const response = await fetch(url, {
+  const response = await fetchWithTimeout(url, {
     headers: {
       Accept: "application/json",
       "X-Subscription-Token": env2.braveSearchApiKey,
@@ -1793,7 +1798,7 @@ async function collectFromBilibiliSearch(keyword, source) {
   url.searchParams.set("search_type", "video");
   url.searchParams.set("keyword", query);
   url.searchParams.set("page", "1");
-  const response = await fetch(url, {
+  const response = await fetchWithTimeout(url, {
     headers: {
       "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
       "Referer": "https://search.bilibili.com",
@@ -1855,7 +1860,7 @@ async function collectFromWeiboHot(keyword, source) {
   if (weiboHotCache && now - weiboHotCache.fetchedAt < 3e5) {
     return filterWeiboTopics(weiboHotCache.topics, keyword, source);
   }
-  const response = await fetch("https://weibo.com/ajax/side/hotSearch", {
+  const response = await fetchWithTimeout("https://weibo.com/ajax/side/hotSearch", {
     headers: {
       "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
       "Referer": "https://www.weibo.com"
@@ -1914,7 +1919,7 @@ async function fetchText2(url) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15e3);
   try {
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       signal: controller.signal,
       headers: {
         "User-Agent": "GameHotspotRadar/0.1"
@@ -2348,9 +2353,14 @@ async function runScan() {
   scanning = true;
   const scanRunId = repositories.scanRuns.start();
   const totals = { fetched: 0, inserted: 0, evaluated: 0 };
+  const isVercel = Boolean(process.env.VERCEL);
   try {
     const keywords = repositories.keywords.active();
-    const sources = repositories.sources.active();
+    let sources = repositories.sources.active();
+    if (isVercel) {
+      sources = sources.filter((s) => s.providerType === "rss" && !s.name.includes("B\u7AD9"));
+      console.log(`[scanner] Vercel fast mode: ${sources.length} sources`);
+    }
     const collected = await collectFromSources(keywords, sources);
     totals.fetched = collected.length;
     const deduped = deduplicateBatch(collected);
@@ -2389,19 +2399,21 @@ async function runScan() {
       seenIds.add(s.id);
       return true;
     }).slice(0, 15);
-    for (const candidate of aiCandidates) {
-      const item = repositories.items.byId(candidate.id);
-      if (!item) continue;
-      if (!isKeywordMentioned(item.title, item.summary, item.matchedKeyword)) {
-        console.log(`[scanner] skip AI eval (keyword not mentioned): ${item.title.slice(0, 40)}`);
-        getDb().prepare("UPDATE items SET status = ? WHERE id = ?").run("ignored", candidate.id);
-        continue;
+    if (!isVercel) {
+      for (const candidate of aiCandidates) {
+        const item = repositories.items.byId(candidate.id);
+        if (!item) continue;
+        if (!isKeywordMentioned(item.title, item.summary, item.matchedKeyword)) {
+          console.log(`[scanner] skip AI eval (keyword not mentioned): ${item.title.slice(0, 40)}`);
+          getDb().prepare("UPDATE items SET status = ? WHERE id = ?").run("ignored", candidate.id);
+          continue;
+        }
+        const keyword = item.keywordId ? keywords.find((entry) => entry.id === item.keywordId) ?? null : null;
+        const source = item.sourceId ? sources.find((entry) => entry.id === item.sourceId) ?? null : null;
+        const evaluation = await evaluateItem(item, keyword, source);
+        repositories.items.addEvaluation(candidate.id, evaluation);
+        totals.evaluated += 1;
       }
-      const keyword = item.keywordId ? keywords.find((entry) => entry.id === item.keywordId) ?? null : null;
-      const source = item.sourceId ? sources.find((entry) => entry.id === item.sourceId) ?? null : null;
-      const evaluation = await evaluateItem(item, keyword, source);
-      repositories.items.addEvaluation(candidate.id, evaluation);
-      totals.evaluated += 1;
     }
     for (const candidate of scoredItems) {
       const item = repositories.items.byId(candidate.id);

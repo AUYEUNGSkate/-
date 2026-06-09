@@ -40,6 +40,12 @@ const parser = new XMLParser({
   trimValues: true
 });
 
+function fetchWithTimeout(url: string | URL, init?: RequestInit, timeoutMs = 8000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, { ...init, signal: controller.signal }).finally(() => clearTimeout(timer));
+}
+
 const GAME_TERMS = ["游戏", "电竞", "手游", "主机", "PS5", "Switch", "Steam", "原神", "米哈游", "腾讯", "网易", "3A", "赛博", "黑神话", "虚幻", "Unity", "育碧", "暴雪", "R星"];
 
 export function isGameKeyword(keyword: Keyword): boolean {
@@ -167,7 +173,7 @@ export async function collectFromBraveSearch(keyword: Keyword, source: Source): 
   url.searchParams.set("country", "cn");
   url.searchParams.set("search_lang", "zh-hans");
 
-  const response = await fetch(url, {
+  const response = await fetchWithTimeout(url, {
     headers: {
       Accept: "application/json",
       "X-Subscription-Token": env.braveSearchApiKey,
@@ -190,7 +196,7 @@ export async function collectFromBilibiliSearch(keyword: Keyword, source: Source
   url.searchParams.set("keyword", query);
   url.searchParams.set("page", "1");
 
-  const response = await fetch(url, {
+  const response = await fetchWithTimeout(url, {
     headers: {
       "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
       "Referer": "https://search.bilibili.com",
@@ -260,7 +266,7 @@ export async function collectFromWeiboHot(keyword: Keyword, source: Source): Pro
   if (weiboHotCache && now - weiboHotCache.fetchedAt < 300000) {
     return filterWeiboTopics(weiboHotCache.topics, keyword, source);
   }
-  const response = await fetch("https://weibo.com/ajax/side/hotSearch", {
+  const response = await fetchWithTimeout("https://weibo.com/ajax/side/hotSearch", {
     headers: {
       "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
       "Referer": "https://www.weibo.com"
@@ -321,7 +327,7 @@ async function fetchText(url: string): Promise<string> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15000);
   try {
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       signal: controller.signal,
       headers: {
         "User-Agent": "GameHotspotRadar/0.1"

@@ -14,10 +14,17 @@ export async function runScan() {
   scanning = true;
   const scanRunId = repositories.scanRuns.start();
   const totals = { fetched: 0, inserted: 0, evaluated: 0 };
+  const isVercel = Boolean(process.env.VERCEL);
 
   try {
     const keywords = repositories.keywords.active();
-    const sources = repositories.sources.active();
+    let sources = repositories.sources.active();
+
+    // Vercel: only use fast RSS sources, skip slow APIs
+    if (isVercel) {
+      sources = sources.filter((s) => s.providerType === "rss" && !s.name.includes("B站"));
+      console.log(`[scanner] Vercel fast mode: ${sources.length} sources`);
+    }
     const collected = await collectFromSources(keywords, sources);
     totals.fetched = collected.length;
 
@@ -70,22 +77,24 @@ export async function runScan() {
       return true;
     }).slice(0, 15);
 
-    for (const candidate of aiCandidates) {
-      const item = repositories.items.byId(candidate.id);
-      if (!item) continue;
+    // Vercel: skip AI evaluation (too slow for serverless)
+    if (!isVercel) {
+      for (const candidate of aiCandidates) {
+        const item = repositories.items.byId(candidate.id);
+        if (!item) continue;
 
-      // Pre-filter: skip AI eval if keyword not mentioned at all
-      if (!isKeywordMentioned(item.title, item.summary, item.matchedKeyword)) {
-        console.log(`[scanner] skip AI eval (keyword not mentioned): ${item.title.slice(0, 40)}`);
-        getDb().prepare("UPDATE items SET status = ? WHERE id = ?").run("ignored", candidate.id);
-        continue;
+        if (!isKeywordMentioned(item.title, item.summary, item.matchedKeyword)) {
+          console.log(`[scanner] skip AI eval (keyword not mentioned): ${item.title.slice(0, 40)}`);
+          getDb().prepare("UPDATE items SET status = ? WHERE id = ?").run("ignored", candidate.id);
+          continue;
+        }
+
+        const keyword = item.keywordId ? keywords.find((entry) => entry.id === item.keywordId) ?? null : null;
+        const source = item.sourceId ? sources.find((entry) => entry.id === item.sourceId) ?? null : null;
+        const evaluation = await evaluateItem(item, keyword, source);
+        repositories.items.addEvaluation(candidate.id, evaluation);
+        totals.evaluated += 1;
       }
-
-      const keyword = item.keywordId ? keywords.find((entry) => entry.id === item.keywordId) ?? null : null;
-      const source = item.sourceId ? sources.find((entry) => entry.id === item.sourceId) ?? null : null;
-      const evaluation = await evaluateItem(item, keyword, source);
-      repositories.items.addEvaluation(candidate.id, evaluation);
-      totals.evaluated += 1;
     }
 
     // Step 5: Classify all items with priority score + relevance filter
