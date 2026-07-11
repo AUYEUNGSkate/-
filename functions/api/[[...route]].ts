@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { initEnv } from "../../server/config/env";
 import { repos, initDb } from "../../server/db/cf-index";
-import { runScan } from "../../server/services/scanner";
+import { runScanCollect, runScanEvaluate } from "../../server/services/scanner-cf";
 import { generateBriefing } from "../../server/services/ai";
 
 const app = new Hono();
@@ -158,19 +158,25 @@ app.get("/api/summary", async (c) => {
 
 app.post("/api/scan", async (c) => {
   try {
-    const result = await runScan();
+    // Phase 1: collect, filter, insert → return immediately
+    const result = await runScanCollect();
     const items = await repos.items.list();
-    return c.json({
-      result,
-      dashboard: {
-        settings: await repos.settings.all(),
-        keywords: await repos.keywords.all(),
-        sources: await repos.sources.all(),
-        items,
-        lastScan: await repos.scanRuns.last(),
-        unreadCount: items.filter((i) => i.status === "new" && !i.readAt).length,
-      },
-    });
+    const dashboard = {
+      settings: await repos.settings.all(),
+      keywords: await repos.keywords.all(),
+      sources: await repos.sources.all(),
+      items,
+      lastScan: await repos.scanRuns.last(),
+      unreadCount: items.filter((i) => i.status === "new" && !i.readAt).length,
+    };
+
+    // Phase 2: AI evaluation in background
+    const waitUntil = (c.env as any).__waitUntil as ((p: Promise<any>) => void) | undefined;
+    if (waitUntil) {
+      waitUntil(runScanEvaluate().catch((err) => console.error("[scan-eval]", err)));
+    }
+
+    return c.json({ result, dashboard });
   } catch (error) {
     return c.json({ error: error instanceof Error ? error.message : String(error) }, 500);
   }
@@ -178,4 +184,7 @@ app.post("/api/scan", async (c) => {
 
 app.all("*", (c) => c.json({ error: `Not found: ${c.req.path}` }, 404));
 
-export const onRequest = app.fetch;
+export async function onRequest(ctx: { request: Request; env: Record<string, unknown>; waitUntil: (p: Promise<any>) => void }) {
+  const env = { ...ctx.env, __waitUntil: ctx.waitUntil };
+  return app.fetch(ctx.request, env, ctx as any);
+}
