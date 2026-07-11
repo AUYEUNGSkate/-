@@ -95,6 +95,8 @@ vercel deploy --prod
 
 ### Cloudflare Pages
 
+利用 `ctx.waitUntil()` 后台评估，先返回采集数据，AI 分析结果逐步补充。
+
 ```bash
 # 1. 设置环境变量（Cloudflare Dashboard > Workers & Pages > hotpulse > Settings > Variables）
 # 添加以下 Secret 变量：
@@ -106,6 +108,8 @@ npm run build:cf
 # 3. 部署
 npx wrangler pages deploy dist --project-name hotpulse
 ```
+
+扫描流程：采集+入库（~8s 返回）→ 后台 AI 评估 → 刷新页面可见分析结果
 
 ### Railway（推荐）
 

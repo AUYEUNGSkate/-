@@ -6,9 +6,8 @@
 ## 当前状态
 
 - **线上版本**：已部署到 Vercel → https://hotpulse-iota.vercel.app
-- **Cloudflare Pages**：已适配，待部署
+- **Cloudflare Pages**：已适配，待部署（含后台 AI 评估优化）
 - **本地版本**：`http://127.0.0.1:5173`（完整可用）
-- 后端 API、Turso 云数据库、OpenRouter AI 判别已集成。
 - 支持本地 SQLite / Vercel / Cloudflare 多环境自动切换。
 - 前端工作台：AI 简报、AI 分析理由、排序/筛选工具栏、关键词开关、来源管理、归档查看。
 
@@ -19,6 +18,13 @@
 - **DB 简化**：`server/db/cf-index.ts` 仅用 Turso，无 better-sqlite3 依赖
 - **环境注入**：`getEnv()` 改为单例，通过 `initEnv()` 接受 Cloudflare Bindings
 - **构建**：`scripts/bundle-cf.mjs` 用 esbuild 预编译，排除所有 Node.js 模块
+- **扫描优化**：利用 `ctx.waitUntil()` 先返回采集数据，AI 评估后台异步补上
+
+### 扫描双阶段
+| 阶段 | 操作 | 耗时 | 说明 |
+|---|---|---|---|
+| Phase 1 | 采集 → 去重 → 入库 → 返回 | ~8s | 前端立即可见内容 |
+| Phase 2 | AI 评估 → 评分 → 写入 Turso | 后台 | waitUntil 异步，下次刷新自动出现 |
 
 ### 部署
 ```bash
