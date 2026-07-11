@@ -12,6 +12,7 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "build": "npm run typecheck && vite build && node scripts/bundle-api.mjs",
+    "build:cf": "node scripts/bundle-cf.mjs",
     "start": "node --import tsx server/index.ts"
   },
   "dependencies": {
@@ -23,6 +24,7 @@
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "fast-xml-parser": "^5.3.2",
+    "hono": "^4.12.29",
     "lucide-react": "^0.562.0",
     "motion": "^12.40.0",
     "react": "^19.2.3",

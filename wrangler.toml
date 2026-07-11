@@ -1,0 +1,17 @@
+# Cloudflare Pages + Functions configuration
+# Deploy: npx wrangler pages deploy dist --project-name hotpulse
+
+name = "hotpulse"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+AI_MODE = "openrouter"
+OPENROUTER_MODEL = "deepseek/deepseek-v4-flash"
+SCAN_INTERVAL_MINUTES = "30"
+
+# Set these via Cloudflare Dashboard (secrets):
+# TURSO_URL        - Turso database URL
+# TURSO_AUTH_TOKEN - Turso auth token
+# OPEN_ROUTER      - OpenRouter API key
+# BRAVE_SEARCH_API_KEY - (optional) Brave Search key

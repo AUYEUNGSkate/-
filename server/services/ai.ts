@@ -1,6 +1,5 @@
-import type { AiEvaluation, HotspotItem, Keyword, Source } from "../../shared/types";
+import type { AiEvaluation, AppSettings, HotspotItem, Keyword, Source } from "../../shared/types";
 import { getEnv } from "../config/env";
-import { repositories } from "../db/client";
 import { cleanArticleTitle, cleanSummary } from "./contentFilter";
 
 const RESPONSE_FORMAT = {
@@ -177,9 +176,10 @@ function generateMockBriefing(items: Array<{ title: string; matchedKeyword: stri
 export async function evaluateItem(
   item: Pick<HotspotItem, "title" | "summary" | "url" | "publishedAt" | "matchedKeyword" | "qualityScore" | "qualitySignals" | "evidenceCount" | "evidenceProviders" | "sourceReliability" | "communitySource">,
   keyword: Keyword | null,
-  source: Source | null
+  source: Source | null,
+  settings?: AppSettings
 ): Promise<AiEvaluation> {
-  const settings = repositories.settings.all();
+  if (!settings) settings = { aiMode: "openrouter", scanIntervalMinutes: 30, openRouterConfigured: true, openRouterModel: "deepseek/deepseek-v4-flash" };
   const env = getEnv();
   if (settings.aiMode === "mock" || !env.openRouterApiKey) {
     return mockEvaluation(item, keyword, source);

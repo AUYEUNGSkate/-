@@ -48,11 +48,10 @@ export interface SourceInput {
 let client: Client | null = null;
 let initialized = false;
 
-export function getTursoClient(): Client {
+export function getTursoClient(overrides?: Record<string, string>): Client {
   if (client) return client;
-  const env = getEnv();
-  const url = process.env.TURSO_URL;
-  const token = process.env.TURSO_AUTH_TOKEN;
+  const url = overrides?.TURSO_URL ?? process.env.TURSO_URL;
+  const token = overrides?.TURSO_AUTH_TOKEN ?? process.env.TURSO_AUTH_TOKEN;
   if (!url || !token) throw new Error("TURSO_URL and TURSO_AUTH_TOKEN required for Turso");
   client = createClient({ url, authToken: token });
   return client;

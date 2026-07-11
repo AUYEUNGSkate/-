@@ -1,13 +1,13 @@
 import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { getEnv } from "./config/env";
+import { initEnv } from "./config/env";
 import { repos, initDb } from "./db/index";
 import { runScan } from "./services/scanner";
 import { generateBriefing } from "./services/ai";
 
 const app = express();
-const env = getEnv();
+const env = initEnv();
 
 app.use(express.json({ limit: "1mb" }));
 

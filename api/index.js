@@ -2,31 +2,36 @@ process.env.VERCEL = "1";
 
 // server/index.ts
 import express from "express";
-import path3 from "node:path";
+import path2 from "node:path";
 import { fileURLToPath } from "node:url";
 
 // server/config/env.ts
-import "dotenv/config";
-import path from "node:path";
-function getEnv() {
-  const dbPath = process.env.VERCEL ? "/tmp/hotpulse.sqlite" : path.resolve(process.cwd(), process.env.DATABASE_PATH ?? "./data/hotspot-radar.sqlite");
-  return {
-    port: Number(process.env.PORT ?? 8787),
-    databasePath: dbPath,
-    scanIntervalMinutes: Number(process.env.SCAN_INTERVAL_MINUTES ?? 30),
-    aiMode: process.env.AI_MODE === "mock" ? "mock" : "openrouter",
-    openRouterApiKey: process.env.OPEN_ROUTER ?? process.env.OPENROUTER_API_KEY ?? "",
-    openRouterModel: process.env.OPENROUTER_MODEL ?? "deepseek/deepseek-v4-flash",
-    openRouterReferer: process.env.OPENROUTER_REFERER ?? "http://localhost:5173",
-    openRouterTitle: process.env.OPENROUTER_TITLE ?? "Game Hotspot Radar",
-    braveSearchApiKey: process.env.BRAVE_SEARCH_API_KEY ?? ""
+var _env = null;
+function initEnv(overrides) {
+  const e = overrides ?? (typeof process !== "undefined" && process.env ? process.env : {});
+  const scanIntervalMinutes = Number(e.SCAN_INTERVAL_MINUTES ?? 30);
+  _env = {
+    port: Number(e.PORT ?? 8787),
+    databasePath: e.DATABASE_PATH ?? "./data/hotspot-radar.sqlite",
+    scanIntervalMinutes: Number.isFinite(scanIntervalMinutes) ? scanIntervalMinutes : 30,
+    aiMode: e.AI_MODE === "mock" ? "mock" : "openrouter",
+    openRouterApiKey: e.OPEN_ROUTER ?? e.OPENROUTER_API_KEY ?? "",
+    openRouterModel: e.OPENROUTER_MODEL ?? "deepseek/deepseek-v4-flash",
+    openRouterReferer: e.OPENROUTER_REFERER ?? "http://localhost:5173",
+    openRouterTitle: e.OPENROUTER_TITLE ?? "Game Hotspot Radar",
+    braveSearchApiKey: e.BRAVE_SEARCH_API_KEY ?? ""
   };
+  return _env;
+}
+function getEnv() {
+  if (!_env) return initEnv();
+  return _env;
 }
 
 // server/db/client.ts
 import Database from "better-sqlite3";
 import fs from "node:fs";
-import path2 from "node:path";
+import path from "node:path";
 
 // server/services/contentFilter.ts
 var SPAM_PATTERNS = [
@@ -287,7 +292,7 @@ var singleton = null;
 function getDb() {
   if (singleton) return singleton;
   const env2 = getEnv();
-  fs.mkdirSync(path2.dirname(env2.databasePath), { recursive: true });
+  fs.mkdirSync(path.dirname(env2.databasePath), { recursive: true });
   singleton = new Database(env2.databasePath);
   singleton.pragma("journal_mode = WAL");
   singleton.pragma("foreign_keys = ON");
@@ -1352,11 +1357,10 @@ function hostname2(url) {
 import { createClient } from "@libsql/client";
 var client = null;
 var initialized = false;
-function getTursoClient() {
+function getTursoClient(overrides) {
   if (client) return client;
-  const env2 = getEnv();
-  const url = process.env.TURSO_URL;
-  const token = process.env.TURSO_AUTH_TOKEN;
+  const url = overrides?.TURSO_URL ?? process.env.TURSO_URL;
+  const token = overrides?.TURSO_AUTH_TOKEN ?? process.env.TURSO_AUTH_TOKEN;
   if (!url || !token) throw new Error("TURSO_URL and TURSO_AUTH_TOKEN required for Turso");
   client = createClient({ url, authToken: token });
   return client;
@@ -1717,9 +1721,14 @@ function hostname3(url) {
 
 // server/db/index.ts
 var initialized2 = false;
+function useTurso() {
+  return Boolean(
+    typeof process !== "undefined" && process.env?.TURSO_URL || typeof process !== "undefined" && process.env?.VERCEL
+  );
+}
 async function initDb() {
   if (initialized2) return;
-  if (process.env.VERCEL) {
+  if (useTurso()) {
     await initTursoDb();
   } else {
     getDb();
@@ -1729,104 +1738,104 @@ async function initDb() {
 var repos = {
   settings: {
     async all() {
-      return process.env.VERCEL ? tursoRepos.settings.all() : repositories.settings.all();
+      return useTurso() ? tursoRepos.settings.all() : repositories.settings.all();
     },
     async set(key, value) {
-      if (process.env.VERCEL) await tursoRepos.settings.set(key, value);
+      if (useTurso()) await tursoRepos.settings.set(key, value);
       else repositories.settings.set(key, value);
     }
   },
   keywords: {
     async all() {
-      return process.env.VERCEL ? tursoRepos.keywords.all() : repositories.keywords.all();
+      return useTurso() ? tursoRepos.keywords.all() : repositories.keywords.all();
     },
     async active() {
-      return process.env.VERCEL ? tursoRepos.keywords.active() : repositories.keywords.active();
+      return useTurso() ? tursoRepos.keywords.active() : repositories.keywords.active();
     },
     async create(term, scope) {
-      return process.env.VERCEL ? tursoRepos.keywords.create(term, scope) : repositories.keywords.create(term, scope);
+      return useTurso() ? tursoRepos.keywords.create(term, scope) : repositories.keywords.create(term, scope);
     },
     async update(id, input) {
-      return process.env.VERCEL ? tursoRepos.keywords.update(id, input) : repositories.keywords.update(id, input);
+      return useTurso() ? tursoRepos.keywords.update(id, input) : repositories.keywords.update(id, input);
     },
     async delete(id) {
-      return process.env.VERCEL ? tursoRepos.keywords.delete(id) : repositories.keywords.delete(id);
+      return useTurso() ? tursoRepos.keywords.delete(id) : repositories.keywords.delete(id);
     },
     async byId(id) {
-      return process.env.VERCEL ? tursoRepos.keywords.byId(id) : repositories.keywords.byId(id);
+      return useTurso() ? tursoRepos.keywords.byId(id) : repositories.keywords.byId(id);
     }
   },
   sources: {
     async all() {
-      return process.env.VERCEL ? tursoRepos.sources.all() : repositories.sources.all();
+      return useTurso() ? tursoRepos.sources.all() : repositories.sources.all();
     },
     async active() {
-      return process.env.VERCEL ? tursoRepos.sources.active() : repositories.sources.active();
+      return useTurso() ? tursoRepos.sources.active() : repositories.sources.active();
     },
     async create(input) {
-      return process.env.VERCEL ? tursoRepos.sources.create(input) : repositories.sources.create(input);
+      return useTurso() ? tursoRepos.sources.create(input) : repositories.sources.create(input);
     },
     async update(id, input) {
-      return process.env.VERCEL ? tursoRepos.sources.update(id, input) : repositories.sources.update(id, input);
+      return useTurso() ? tursoRepos.sources.update(id, input) : repositories.sources.update(id, input);
     },
     async delete(id) {
-      return process.env.VERCEL ? tursoRepos.sources.delete(id) : repositories.sources.delete(id);
+      return useTurso() ? tursoRepos.sources.delete(id) : repositories.sources.delete(id);
     },
     async byId(id) {
-      return process.env.VERCEL ? tursoRepos.sources.byId(id) : repositories.sources.byId(id);
+      return useTurso() ? tursoRepos.sources.byId(id) : repositories.sources.byId(id);
     }
   },
   items: {
     async list(limit = 80) {
-      return process.env.VERCEL ? tursoRepos.items.list(limit) : repositories.items.list(limit);
+      return useTurso() ? tursoRepos.items.list(limit) : repositories.items.list(limit);
     },
     async archived(limit = 100) {
-      return process.env.VERCEL ? tursoRepos.items.archived(limit) : repositories.items.archived(limit);
+      return useTurso() ? tursoRepos.items.archived(limit) : repositories.items.archived(limit);
     },
     async restore(id) {
-      return process.env.VERCEL ? tursoRepos.items.restore(id) : repositories.items.restore(id);
+      return useTurso() ? tursoRepos.items.restore(id) : repositories.items.restore(id);
     },
     async batchRestore(ids) {
-      return process.env.VERCEL ? tursoRepos.items.batchRestore(ids) : repositories.items.batchRestore(ids);
+      return useTurso() ? tursoRepos.items.batchRestore(ids) : repositories.items.batchRestore(ids);
     },
     async batchDelete(ids) {
-      return process.env.VERCEL ? tursoRepos.items.batchDelete(ids) : repositories.items.batchDelete(ids);
+      return useTurso() ? tursoRepos.items.batchDelete(ids) : repositories.items.batchDelete(ids);
     },
     async archiveStaleItems() {
-      return process.env.VERCEL ? tursoRepos.items.archiveStaleItems() : repositories.items.archiveStaleItems();
+      return useTurso() ? tursoRepos.items.archiveStaleItems() : repositories.items.archiveStaleItems();
     },
     async byId(id) {
-      return process.env.VERCEL ? tursoRepos.items.byId(id) : repositories.items.byId(id);
+      return useTurso() ? tursoRepos.items.byId(id) : repositories.items.byId(id);
     },
     async insert(input) {
-      return process.env.VERCEL ? tursoRepos.items.insert(input) : repositories.items.insert(input);
+      return useTurso() ? tursoRepos.items.insert(input) : repositories.items.insert(input);
     },
     async markRead(id) {
-      return process.env.VERCEL ? tursoRepos.items.markRead(id) : repositories.items.markRead(id);
+      return useTurso() ? tursoRepos.items.markRead(id) : repositories.items.markRead(id);
     },
     async updateStatus(id, status) {
-      if (process.env.VERCEL) await tursoRepos.items.updateStatus(id, status);
+      if (useTurso()) await tursoRepos.items.updateStatus(id, status);
       else repositories.items.updateStatus(id, status);
     },
     async updatePriority(id, priorityScore, freshnessScore, status) {
-      if (process.env.VERCEL) await tursoRepos.items.updatePriority(id, priorityScore, freshnessScore, status);
+      if (useTurso()) await tursoRepos.items.updatePriority(id, priorityScore, freshnessScore, status);
       else repositories.items.updatePriority(id, priorityScore, freshnessScore, status);
     },
     async addEvaluation(itemId, evaluation) {
-      if (process.env.VERCEL) await tursoRepos.items.addEvaluation(itemId, evaluation);
+      if (useTurso()) await tursoRepos.items.addEvaluation(itemId, evaluation);
       else repositories.items.addEvaluation(itemId, evaluation);
     }
   },
   scanRuns: {
     async start() {
-      return process.env.VERCEL ? tursoRepos.scanRuns.start() : repositories.scanRuns.start();
+      return useTurso() ? tursoRepos.scanRuns.start() : repositories.scanRuns.start();
     },
     async finish(id, status, totals) {
-      if (process.env.VERCEL) await tursoRepos.scanRuns.finish(id, status, totals);
+      if (useTurso()) await tursoRepos.scanRuns.finish(id, status, totals);
       else repositories.scanRuns.finish(id, status, totals);
     },
     async last() {
-      return process.env.VERCEL ? tursoRepos.scanRuns.last() : repositories.scanRuns.last();
+      return useTurso() ? tursoRepos.scanRuns.last() : repositories.scanRuns.last();
     }
   }
 };
@@ -2705,8 +2714,8 @@ function generateMockBriefing(items) {
   const keywords = [...new Set(top.map((i) => i.matchedKeyword))].slice(0, 3).join("\u3001");
   return `\u5F53\u524D\u76D1\u63A7\u5230 ${items.length} \u6761\u70ED\u70B9\uFF0C\u4E3B\u8981\u6D89\u53CA ${keywords} \u7B49\u9886\u57DF\uFF0C\u5176\u4E2D\u591A\u7BC7\u5185\u5BB9\u5173\u6CE8\u6700\u65B0\u52A8\u6001\u4E0E\u6280\u672F\u8D8B\u52BF\u3002`;
 }
-async function evaluateItem(item, keyword, source) {
-  const settings = repositories.settings.all();
+async function evaluateItem(item, keyword, source, settings) {
+  if (!settings) settings = { aiMode: "openrouter", scanIntervalMinutes: 30, openRouterConfigured: true, openRouterModel: "deepseek/deepseek-v4-flash" };
   const env2 = getEnv();
   if (settings.aiMode === "mock" || !env2.openRouterApiKey) {
     return mockEvaluation(item, keyword, source);
@@ -2926,7 +2935,8 @@ async function runScan() {
       }
       const keyword = item.keywordId ? keywords.find((entry) => entry.id === item.keywordId) ?? null : null;
       const source = item.sourceId ? sources.find((entry) => entry.id === item.sourceId) ?? null : null;
-      const evaluation = await evaluateItem(item, keyword, source);
+      const settings = await repos.settings.all();
+      const evaluation = await evaluateItem(item, keyword, source, settings);
       await repos.items.addEvaluation(candidate.id, evaluation);
       totals.evaluated += 1;
     }
@@ -2981,7 +2991,7 @@ function deduplicateBatch(items) {
 
 // server/index.ts
 var app = express();
-var env = getEnv();
+var env = initEnv();
 app.use(express.json({ limit: "1mb" }));
 app.get("/api/health", async (_req, res) => {
   await initDb();
@@ -3123,12 +3133,12 @@ function visibleUnreadCount(items) {
   return items.filter((item) => item.status === "new" && item.readAt === null && !item.archivedAt).length;
 }
 function serveFrontendInProduction() {
-  const __dirname = path3.dirname(fileURLToPath(import.meta.url));
-  const dist = path3.resolve(__dirname, "../dist");
+  const __dirname = path2.dirname(fileURLToPath(import.meta.url));
+  const dist = path2.resolve(__dirname, "../dist");
   app.use(express.static(dist));
   app.get("*splat", (req, res, next) => {
     if (req.path.startsWith("/api")) return next();
-    res.sendFile(path3.join(dist, "index.html"), (error) => {
+    res.sendFile(path2.join(dist, "index.html"), (error) => {
       if (error) next();
     });
   });

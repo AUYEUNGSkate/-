@@ -67,8 +67,8 @@ npm run build     # 生产构建
 | `OPEN_ROUTER` | OpenRouter API Key | 本地/云 |
 | `AI_MODE` | `openrouter` 或 `mock` | 否 |
 | `OPENROUTER_MODEL` | 模型名称（默认 `deepseek/deepseek-v4-flash`） | 否 |
-| `TURSO_URL` | Turso 数据库 URL（仅 Vercel） | 云 |
-| `TURSO_AUTH_TOKEN` | Turso 认证 Token（仅 Vercel） | 云 |
+| `TURSO_URL` | Turso 数据库 URL（Vercel / Cloudflare） | 云 |
+| `TURSO_AUTH_TOKEN` | Turso 认证 Token（Vercel / Cloudflare） | 云 |
 | `SCAN_INTERVAL_MINUTES` | 扫描间隔分钟数（默认 30） | 否 |
 
 ## 部署
@@ -91,7 +91,21 @@ vercel env add TURSO_AUTH_TOKEN production --value <token>
 vercel deploy --prod
 ```
 
-**注意**：Vercel 有 30 秒执行限制，扫描可能超时但数据会持久化。如需完整功能，推荐 Railway.app 或 Render.com。
+**注意**：Vercel 有 30 秒执行限制，扫描可能超时但数据会持久化。
+
+### Cloudflare Pages
+
+```bash
+# 1. 设置环境变量（Cloudflare Dashboard > Workers & Pages > hotpulse > Settings > Variables）
+# 添加以下 Secret 变量：
+#   TURSO_URL, TURSO_AUTH_TOKEN, OPEN_ROUTER
+
+# 2. 构建
+npm run build:cf
+
+# 3. 部署
+npx wrangler pages deploy dist --project-name hotpulse
+```
 
 ### Railway（推荐）
 

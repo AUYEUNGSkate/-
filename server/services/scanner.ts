@@ -88,7 +88,8 @@ export async function runScan() {
 
         const keyword = item.keywordId ? keywords.find((entry) => entry.id === item.keywordId) ?? null : null;
         const source = item.sourceId ? sources.find((entry) => entry.id === item.sourceId) ?? null : null;
-        const evaluation = await evaluateItem(item, keyword, source);
+        const settings = await repos.settings.all();
+        const evaluation = await evaluateItem(item, keyword, source, settings);
         await repos.items.addEvaluation(candidate.id, evaluation);
         totals.evaluated += 1;
       }

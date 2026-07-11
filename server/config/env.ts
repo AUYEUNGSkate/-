@@ -1,5 +1,4 @@
-import "dotenv/config";
-import path from "node:path";
+// Environment config - singleton pattern for both Node.js and Workers
 
 export interface EnvConfig {
   port: number;
@@ -13,19 +12,26 @@ export interface EnvConfig {
   braveSearchApiKey: string;
 }
 
-export function getEnv(): EnvConfig {
-  const dbPath = process.env.VERCEL
-    ? "/tmp/hotpulse.sqlite"
-    : path.resolve(process.cwd(), process.env.DATABASE_PATH ?? "./data/hotspot-radar.sqlite");
-  return {
-    port: Number(process.env.PORT ?? 8787),
-    databasePath: dbPath,
-    scanIntervalMinutes: Number(process.env.SCAN_INTERVAL_MINUTES ?? 30),
-    aiMode: process.env.AI_MODE === "mock" ? "mock" : "openrouter",
-    openRouterApiKey: process.env.OPEN_ROUTER ?? process.env.OPENROUTER_API_KEY ?? "",
-    openRouterModel: process.env.OPENROUTER_MODEL ?? "deepseek/deepseek-v4-flash",
-    openRouterReferer: process.env.OPENROUTER_REFERER ?? "http://localhost:5173",
-    openRouterTitle: process.env.OPENROUTER_TITLE ?? "Game Hotspot Radar",
-    braveSearchApiKey: process.env.BRAVE_SEARCH_API_KEY ?? ""
+let _env: EnvConfig | null = null;
+
+export function initEnv(overrides?: Record<string, string | undefined>): EnvConfig {
+  const e = overrides ?? (typeof process !== "undefined" && process.env ? process.env as Record<string, string | undefined> : {});
+  const scanIntervalMinutes = Number(e.SCAN_INTERVAL_MINUTES ?? 30);
+  _env = {
+    port: Number(e.PORT ?? 8787),
+    databasePath: e.DATABASE_PATH ?? "./data/hotspot-radar.sqlite",
+    scanIntervalMinutes: Number.isFinite(scanIntervalMinutes) ? scanIntervalMinutes : 30,
+    aiMode: e.AI_MODE === "mock" ? "mock" : "openrouter",
+    openRouterApiKey: e.OPEN_ROUTER ?? e.OPENROUTER_API_KEY ?? "",
+    openRouterModel: e.OPENROUTER_MODEL ?? "deepseek/deepseek-v4-flash",
+    openRouterReferer: e.OPENROUTER_REFERER ?? "http://localhost:5173",
+    openRouterTitle: e.OPENROUTER_TITLE ?? "Game Hotspot Radar",
+    braveSearchApiKey: e.BRAVE_SEARCH_API_KEY ?? ""
   };
+  return _env;
+}
+
+export function getEnv(): EnvConfig {
+  if (!_env) return initEnv();
+  return _env;
 }
