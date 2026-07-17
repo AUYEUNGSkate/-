@@ -6,7 +6,7 @@ await esbuild.build({
   platform: "browser",
   target: "es2022",
   format: "esm",
-  outfile: "functions/api/[[...route]].js",
+  outfile: "dist/functions/api/[[...route]].js",
   external: [
     "better-sqlite3",
     "express",

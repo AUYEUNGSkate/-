@@ -103,7 +103,7 @@ vercel deploy --prod
 #   TURSO_URL, TURSO_AUTH_TOKEN, OPEN_ROUTER
 
 # 2. 构建
-npm run build:cf
+npm run build
 
 # 3. 部署
 npx wrangler pages deploy dist --project-name hotpulse

@@ -28,7 +28,7 @@
 
 ### 部署
 ```bash
-npm run build:cf                             # 构建 Functions
+npm run build                                # 构建（含 Vite + Vercel + Cloudflare）
 npx wrangler pages deploy dist               # 部署到 Cloudflare
 ```
 环境变量在 Cloudflare Dashboard → Settings → Variables 中设置（TURSO_URL, TURSO_AUTH_TOKEN, OPEN_ROUTER）
