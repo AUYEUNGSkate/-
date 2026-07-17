@@ -1,12 +1,12 @@
 import * as esbuild from "esbuild";
 
 await esbuild.build({
-  entryPoints: ["functions/api/[[...route]].ts"],
+  entryPoints: ["functions/api/[[path]].ts"],
   bundle: true,
   platform: "browser",
   target: "es2022",
   format: "esm",
-  outfile: "dist/functions/api/[[...route]].js",
+  outfile: "dist/functions/api/[[path]].js",
   external: [
     "better-sqlite3",
     "express",
@@ -27,4 +27,4 @@ await esbuild.build({
   },
 });
 
-console.log("Cloudflare Pages function bundled to functions/api/[[...route]].js");
+console.log("Cloudflare Pages function bundled to dist/functions/api/[[path]].js");
