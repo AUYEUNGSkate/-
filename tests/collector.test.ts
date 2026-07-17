@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Keyword, Source } from "../shared/types";
+import { initEnv } from "../server/config/env";
 import { buildFeedUrl, collectFromBraveSearch, parseFeed } from "../server/services/collector";
 
 const keyword: Keyword = {
@@ -32,6 +33,7 @@ describe("collector", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     delete process.env.BRAVE_SEARCH_API_KEY;
+    initEnv({});
   });
 
   it("builds a query feed url", () => {
@@ -75,6 +77,7 @@ describe("collector", () => {
 
   it("normalizes Brave Search results when an API key is configured", async () => {
     process.env.BRAVE_SEARCH_API_KEY = "test-key";
+    initEnv(process.env as Record<string, string | undefined>);
     vi.stubGlobal("fetch", vi.fn(async () => ({
       ok: true,
       json: async () => ({
@@ -99,6 +102,7 @@ describe("collector", () => {
 
   it("skips malformed Brave Search result urls", async () => {
     process.env.BRAVE_SEARCH_API_KEY = "test-key";
+    initEnv(process.env as Record<string, string | undefined>);
     vi.stubGlobal("fetch", vi.fn(async () => ({
       ok: true,
       json: async () => ({
