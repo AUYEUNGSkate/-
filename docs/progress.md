@@ -1,102 +1,88 @@
 # 项目进度记录
 
-更新时间：2026-06-09
-当前提交：085fd53
+更新时间：2026-07-17
+当前提交：16e0778
 
 ## 当前状态
 
-- **线上版本**：已部署到 Vercel → https://hotpulse-iota.vercel.app
-- **Cloudflare Pages**：已适配，待部署（含后台 AI 评估优化）
-- **本地版本**：`http://127.0.0.1:5173`（完整可用）
-- 支持本地 SQLite / Vercel / Cloudflare 多环境自动切换。
-- 前端工作台：AI 简报、AI 分析理由、排序/筛选工具栏、关键词开关、来源管理、归档查看。
+- **Vercel 线上**：https://hotpulse-iota.vercel.app
+- **Cloudflare Pages**：已部署（GitHub 自动构建 + 后台 AI 评估）
+- **本地开发**：`http://127.0.0.1:5173`（完整可用）
+- **GitHub**：https://github.com/AUYEUNGSkate/-
+- 支持本地 SQLite / Vercel / Cloudflare 三环境切换
+- 前端工作台：AI 简报、AI 分析理由、排序/筛选、关键词/来源管理、归档
 
-## Cloudflare Pages 适配（2026-06-09）
+## Cloudflare Pages 适配
 
-### 技术变更
-- **Express → Hono**：框架切换，语法相近，兼容 Cloudflare Workers 运行时
-- **DB 简化**：`server/db/cf-index.ts` 仅用 Turso，无 better-sqlite3 依赖
-- **环境注入**：`getEnv()` 改为单例，通过 `initEnv()` 接受 Cloudflare Bindings
-- **构建**：`scripts/bundle-cf.mjs` 用 esbuild 预编译，排除所有 Node.js 模块
-- **扫描优化**：利用 `ctx.waitUntil()` 先返回采集数据，AI 评估后台异步补上
+### 技术架构
+- **Hono 替代 Express**：兼容 Cloudflare Workers 运行时
+- **DB**：`server/db/cf-index.ts` 直接调用 Turso，不依赖 better-sqlite3
+- **环境注入**：`initEnv(c.env)` 从 Cloudflare Bindings 读取配置
+- **构建**：esbuild 输出到 `dist/functions/api/[[path]].js`，随静态文件一起部署
 
-### 扫描双阶段
+### 扫描优化（核心差异）
 | 阶段 | 操作 | 耗时 | 说明 |
 |---|---|---|---|
 | Phase 1 | 采集 → 去重 → 入库 → 返回 | ~8s | 前端立即可见内容 |
-| Phase 2 | AI 评估 → 评分 → 写入 Turso | 后台 | waitUntil 异步，下次刷新自动出现 |
+| Phase 2 | AI 评估 → 评分 → 写入 Turso | 后台 | `ctx.waitUntil()` 异步，下次刷新自动出现 |
 
-### 部署
-```bash
-npm run build                                # 构建（含 Vite + Vercel + Cloudflare）
-npx wrangler pages deploy dist               # 部署到 Cloudflare
-```
-环境变量在 Cloudflare Dashboard → Settings → Variables 中设置（TURSO_URL, TURSO_AUTH_TOKEN, OPEN_ROUTER）
+### 部署问题修复
+1. **函数未部署**：`wrangler pages deploy dist` 不包含根目录 `functions/`，改为输出到 `dist/functions/api/`
+2. **路由命名**：`[[...route]].ts` 不被 Cloudflare 支持 → 改为 `[[path]].ts`
+3. **构建顺序**：Vite 会清空 `dist/`，CF 函数构建放在 Vite 之后
 
-## Vercel 部署（2026-06-09）
+### 环境变量（Cloudflare Dashboard）
+| Secret | 说明 |
+|---|---|
+| `TURSO_URL` | Turso 数据库 URL |
+| `TURSO_AUTH_TOKEN` | Turso 认证 Token |
+| `OPEN_ROUTER` | OpenRouter API Key |
+
+## Vercel 部署
 
 ### 架构
 - **前端**：Vite React SPA，托管在 Vercel Static
-- **后端**：Express API，作为 Vercel Serverless Function（`api/index.js`）
-- **数据库**：Turso 云 SQLite（`libsql://`），替代本地 SQLite
-- **AI**：OpenRouter API（每轮扫描评估 1 条热点，时间限制）
+- **后端**：Express API，Serverless Function（`api/index.js`）
+- **数据库**：Turso 云 SQLite
+- **AI**：OpenRouter（每轮评估 1 条，30s 限制）
 
 ### 已知限制
-- **扫描 30s 超时**：Vercel Hobby 限制，扫描可多次运行积累数据
-- **AI 评估受限**：每轮仅评估 1 条热点（超时限制）
-- **无 worker**：Vercel 不支持持久后台进程，需手动触发扫描
-- **端口不一致**：本地开发需单独启动 web + api
+- 扫描 30s 超时（Hobby 限制）
+- AI 评估受限（每轮仅 1 条）
+- 无持久后台进程（需手动触发扫描）
 
-### 环境变量（Vercel）
-| 变量 | 说明 |
-|------|------|
-| `OPEN_ROUTER` | OpenRouter API Key |
-| `AI_MODE` | `openrouter` 或 `mock` |
-| `TURSO_URL` | Turso 数据库 URL |
-| `TURSO_AUTH_TOKEN` | Turso 认证 Token |
+## 已有的通用优化
 
-## 本次已完成（Vercel 适配）
+### 信息源
+- 7 个活跃源：机核网、游研社、触乐、RSSHub 百度搜索、微博热搜（B站搜索已禁用）
+- 自动区分游戏/非游戏关键词，跳过不相关来源
 
-### Turso 云数据库集成
-- `server/db/turso.ts`：基于 `@libsql/client` 的异步 SQLite 兼容层
-- `server/db/index.ts`：Vercel / 本地自动切换的 repos 路由
-- 所有 API 端点改为异步（兼容 Turso HTTP 访问）
+### 检索精度
+- CJK bigram 分词匹配，门槛 50 分
+- 并行采集（串行 144s → 并行 8s），8s fetch 超时
+- 内容质量过滤（百度中转/SEO/目录/空页面扣分）
 
-### 扫描优化
-- **并行采集**：`Promise.all` 同时请求所有 RSS 源（从串行 144s → 并行 8s）
-- **超时控制**：每个 fetch 请求 8s 超时，避免死等
-- **关键词相关性过滤**：入库前用 bigram 算法过滤不相关内容（门槛 ≥50 分）
-- **Vercel 快速模式**：自动过滤慢速来源，仅使用 RSS
-
-### CJK 关键词精度
-- 新增中日韩双字组合（bigram）分词匹配
-- 评分阈值收紧：50%（非标题）→ 35 分，低于 50 分门槛过滤
-- 解决"搜游戏节出现游戏上线"的问题
+### 排序与筛选
+- 优先级排序（relevance × 30% + quality × 20% + freshness × 20% + other）
+- 关键词、来源、已读/未读、热度多维度筛选
 
 ## 已验证
 
 ```powershell
-& 'D:\Node.js\npm.cmd' test
-& 'D:\Node.js\npm.cmd' run typecheck
-& 'D:\Node.js\npm.cmd' run build
+& 'D:\Node.js\npm.cmd' test         # 135 用例（134 通过）
+& 'D:\Node.js\npm.cmd' run typecheck # 类型检查通过
+& 'D:\Node.js\npm.cmd' run build     # 构建通过
 ```
-
-验证结果：
-- 测试文件：11 个通过
-- 测试用例：135 个通过
-- TypeScript 类型检查通过
-- Vite 生产构建通过
 
 ## 当前限制
 
-- Vercel 扫描有 30s 上限，如需完整扫描体验推荐 Railway.app
-- Brave Search 是可选增强源，默认禁用
-- RSSHub 桥接源需确保 `rsshub.rssforever.com` 可访问
-- B站互动量通过公开视频 API 获取
+- Brave Search 可选增强，默认禁用
+- RSSHub 部分路由返回 503
 - AI 简报依赖 OpenRouter Key
+- Cloudflare 扫描仅用 RSS 源（避免超时）
 
-## 下一步建议
+## 下一步
 
-1. 将项目迁移到 Railway / Render 以获得无限制扫描时间
+1. 观察 Cloudflare 后台 AI 评估的稳定性
 2. 完善 Agent Skill 封装
 3. 添加 Telegram / Webhook 外部通知
