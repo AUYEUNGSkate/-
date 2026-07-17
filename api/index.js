@@ -13,6 +13,8 @@ function initEnv(overrides) {
   _env = {
     port: Number(e.PORT ?? 8787),
     databasePath: e.DATABASE_PATH ?? "./data/hotspot-radar.sqlite",
+    tursoUrl: e.TURSO_URL ?? "",
+    tursoAuthToken: e.TURSO_AUTH_TOKEN ?? "",
     scanIntervalMinutes: Number.isFinite(scanIntervalMinutes) ? scanIntervalMinutes : 30,
     aiMode: e.AI_MODE === "mock" ? "mock" : "openrouter",
     openRouterApiKey: e.OPEN_ROUTER ?? e.OPENROUTER_API_KEY ?? "",
@@ -1359,8 +1361,9 @@ var client = null;
 var initialized = false;
 function getTursoClient(overrides) {
   if (client) return client;
-  const url = overrides?.TURSO_URL ?? process.env.TURSO_URL;
-  const token = overrides?.TURSO_AUTH_TOKEN ?? process.env.TURSO_AUTH_TOKEN;
+  const env2 = getEnv();
+  const url = overrides?.TURSO_URL ?? env2.tursoUrl;
+  const token = overrides?.TURSO_AUTH_TOKEN ?? env2.tursoAuthToken;
   if (!url || !token) throw new Error("TURSO_URL and TURSO_AUTH_TOKEN required for Turso");
   client = createClient({ url, authToken: token });
   return client;

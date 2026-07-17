@@ -1,12 +1,12 @@
 # 项目进度记录
 
-更新时间：2026-07-17
+更新时间：2026-07-18
 当前提交：见 Git 历史
 
 ## 当前状态
 
 - **Vercel 线上**：https://hotpulse-iota.vercel.app
-- **Cloudflare Pages**：已部署，使用 GitHub 自动构建 + 后台 AI 评估。
+- **Cloudflare Pages**：https://hotpulse-eg1.pages.dev，生产 API 与 Turso 连接已恢复。
 - **本地开发**：`http://127.0.0.1:5173` 完整可用。
 - **GitHub**：https://github.com/AUYEUNGSkate/-
 - 支持本地 SQLite / Vercel / Cloudflare 三环境切换。
@@ -100,13 +100,21 @@
 - 优先级排序：relevance 30% + quality 20% + freshness 20% + other。
 - 支持关键词、来源、已读/未读、热度等多维度筛选。
 
+## 2026-07-18 Cloudflare 生产恢复
+
+- 修复 Pages Function 环境注入：`initEnv(c.env)` 现在会保存 `TURSO_URL` 与 `TURSO_AUTH_TOKEN`，Turso 客户端通过统一配置读取绑定，不再依赖 Workers 中不存在的 `process.env`。
+- 新增 Cloudflare 环境绑定回归测试，覆盖 Turso 客户端从 Worker bindings 初始化的路径。
+- 重新生成 Turso Read & Write Token，并修正被终端提示文本污染的 `TURSO_URL` Secret。
+- 使用 Wrangler 4 重新部署；生产地址 `https://hotpulse-eg1.pages.dev` 的 `/api/health` 与 `/api/dashboard` 均返回 HTTP 200，前端工作台可正常加载。
+- Cloudflare Secret 仅保存在平台环境中，未写入仓库、构建产物或文档。
+
 ## 已验证
 
 ```powershell
-& 'D:\Node.js\npm.cmd' test          # 11 个测试文件，135 个用例通过
+& 'D:\Node.js\npm.cmd' test          # 12 个测试文件，136 个用例通过
 & 'D:\Node.js\npm.cmd' run typecheck # 类型检查通过
 & 'D:\Node.js\npm.cmd' run build     # 构建通过
-& 'D:\Node.js\npx.cmd' --yes wrangler@3.114.17 pages functions build functions # Pages Functions 编译通过
+& 'D:\Node.js\npx.cmd' --yes wrangler@4 pages deploy dist --project-name hotpulse # Pages 部署通过
 ```
 
 浏览器验收：

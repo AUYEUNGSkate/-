@@ -21,7 +21,7 @@
 | 后端 | Express 5 + TypeScript |
 | 数据库 | **本地**：better-sqlite3 \| **云**：Turso (libsql) |
 | AI | OpenRouter (DeepSeek V4) |
-| 测试 | Vitest (135 用例) |
+| 测试 | Vitest (136 用例) |
 
 ## 快速开始
 
@@ -55,7 +55,7 @@ npm run worker
 ### 运行测试
 
 ```bash
-npm test          # 135 用例
+npm test          # 136 用例
 npm run typecheck # TypeScript 检查
 npm run build     # 生产构建
 ```

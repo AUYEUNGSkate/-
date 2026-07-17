@@ -50,8 +50,9 @@ let initialized = false;
 
 export function getTursoClient(overrides?: Record<string, string>): Client {
   if (client) return client;
-  const url = overrides?.TURSO_URL ?? process.env.TURSO_URL;
-  const token = overrides?.TURSO_AUTH_TOKEN ?? process.env.TURSO_AUTH_TOKEN;
+  const env = getEnv();
+  const url = overrides?.TURSO_URL ?? env.tursoUrl;
+  const token = overrides?.TURSO_AUTH_TOKEN ?? env.tursoAuthToken;
   if (!url || !token) throw new Error("TURSO_URL and TURSO_AUTH_TOKEN required for Turso");
   client = createClient({ url, authToken: token });
   return client;
